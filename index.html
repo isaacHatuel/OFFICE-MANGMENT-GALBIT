@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>ניהול משרד גלביט הנדסה</title>
+    <style>
+        :root {
+            --main-bg: #eaf6fb;
+            --container-bg: #ffffff;
+            --primary: #4fc3f7;
+            --primary-dark: #039be5;
+            --primary-light: #b3e5fc;
+            --tab-active: #e3f2fd;
+            --tab-inactive: #b3e5fc33;
+            --border: #b3e5fc;
+            --text: #1a3557;
+            --shadow: 0 2px 12px #4fc3f722;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: var(--main-bg);
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            background: var(--container-bg);
+            padding: 36px 32px 32px 32px;
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary-dark);
+            font-size: 2.3em;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 28px;
+            background: var(--tab-inactive);
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+        }
+        .tab {
+            flex: 1;
+            padding: 14px 0;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1.13em;
+            color: var(--text);
+            transition: background 0.2s, color 0.2s;
+            font-weight: 500;
+        }
+        .tab.active {
+            background: var(--tab-active);
+            color: var(--primary-dark);
+            border-bottom: 3px solid var(--primary);
+            font-weight: bold;
+        }
+        .tab:not(.active):hover {
+            background: var(--primary-light);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadein 0.3s;
+        }
+        @keyframes fadein {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+            background: #fafdff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 6px #4fc3f71a;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 2px 4px;
+            text-align: center;
+            font-size: 1em;
+        }
+        /* עיצוב תא הערות ללוח ביומן משימות מחלקתי */
+        #tasks-journal-table td.journal-notes-cell {
+            max-width: 140px;
+            min-width: 80px;
+            width: 120px;
+            max-height: 38px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            word-break: break-all;
+            transition: border 0.2s, border-radius 0.2s;
+        }
+        #tasks-journal-table td.journal-notes-cell.has-notes {
+            border: 2px solid red !important;
+            border-radius: 8px !important;
+        }
+        th {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background: #eaf6fb;
+        }
+        tr:nth-child(odd) {
+            background: #fafdff;
+        }
+        .add-row-btn {
+            margin: 15px 0 0 0;
+            padding: 10px 28px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 1.08em;
+            font-weight: 500;
+            box-shadow: 0 1px 4px #4fc3f722;
+            transition: background 0.2s;
+        }
+        .add-row-btn:hover {
+            background: var(--primary-dark);
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 7px 5px;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            font-size: 1em;
+            background: #fafdff;
+            margin-bottom: 4px;
+        }
+        input[type="checkbox"] {
+            transform: scale(1.25);
+            accent-color: var(--primary);
+        }
+        button {
+            font-family: inherit;
+        }
+        td .action-btn {
+            margin: 0 2px;
+            padding: 4px 10px 4px 8px;
+            border-radius: 5px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 1em;
+            transition: background 0.2s, color 0.2s;
+        }
+        .edit-btn {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .edit-btn:hover {
+            background: #1976d2;
+            color: #fff;
+        }
+        .delete-btn {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        .delete-btn:hover {
+            background: #d32f2f;
+            color: #fff;
+        }
+        .duplicate-btn {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        .duplicate-btn:hover {
+            background: #388e3c;
+            color: #fff;
+        }
+        dialog {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px #4fc3f744;
+            padding: 24px 30px 18px 30px;
+            background: #fafdff;
+            min-width: 340px;
+        }
+        dialog::backdrop {
+            background: #4fc3f733;
+        }
+        #project-form label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text);
+            font-size: 1em;
+        }
+        #project-form input[type="text"] {
+            margin-bottom: 0;
+        }
+        #project-form menu {
+            margin-top: 18px;
+        }
+        #project-form button[type="submit"] {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #project-form button[type="submit"]:hover {
+            background: var(--primary-dark);
+        }
+        #project-form button[type="button"] {
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #project-form button[type="button"]:hover {
+            background: #bdbdbd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ניהול משרד גלביט הנדסה</h1>
+        <div class="tabs">
+            <button class="tab active" onclick="showTab(0)">מעקב פרויקטים</button>
+            <button class="tab" onclick="showTab(1)">יומן משימות מחלקתי</button>
+            <button class="tab" onclick="showTab(2)">משימות שבוצעו</button>
+        </div>
+        <div class="tab-content active" id="tab-0">
+            <button class="add-row-btn" onclick="openProjectDialog()">הוסף פרוייקט</button>
+            <table id="projects-table-active">
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם לקוח</th>
+                        <th>שם פרוייקט</th>
+                        <th>שם לוח</th>
+                        <th>שם עובד</th>
+                        <th>סטטוס</th>
+                        <th>סטטוס שלילי</th>
+                        <th>סטטוס שלילי 2</th>
+                        <th>סטטוס שלילי 3</th>
+                        <th>הערות</th>
+                        <th>טופל</th>
+                        <th>נמסר</th>
+                        <th>הסתיים</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <!-- דיאלוג הוספת/עריכת פרויקט -->
+            <dialog id="project-dialog">
+                <form id="project-form" method="dialog" style="min-width:350px">
+                    <h3 id="dialog-title">הוסף פרוייקט</h3>
+                    <label>שם לקוח:<br>
+                        <select name="client" id="dialog-client"></select>
+                    </label><br>
+                    <label>שם פרוייקט:<br>
+                        <input type="text" name="projectName" required>
+                    </label><br>
+                    <label>שם לוח:<br>
+                        <input type="text" name="boardName">
+                    </label><br>
+                    <label>שם עובד:<br>
+                        <select name="worker" id="dialog-worker"></select>
+                    </label><br>
+                    <label>סטטוס:<br>
+                        <select name="status" id="dialog-status"></select>
+                    </label><br>
+                    <label>סטטוס שלילי:<br>
+                        <select name="neg1" id="dialog-neg1"></select>
+                    </label><br>
+                    <label>סטטוס שלילי 2:<br>
+                        <select name="neg2" id="dialog-neg2"></select>
+                    </label><br>
+                    <label>סטטוס שלילי 3:<br>
+                        <select name="neg3" id="dialog-neg3"></select>
+                    </label><br>
+                    <label>הערות:<br>
+                        <input type="text" name="notes">
+                    </label><br>
+                    <label><input type="checkbox" name="treated"> טופל</label>
+                    <label><input type="checkbox" name="delivered"> נמסר</label>
+                    <label><input type="checkbox" name="finished"> הסתיים</label><br><br>
+                    <menu style="display:flex;gap:10px;justify-content:flex-end">
+                        <button type="submit" id="dialog-save">הוסף</button>
+                        <button type="button" onclick="closeProjectDialog()">ביטול</button>
+                    </menu>
+                </form>
+            </dialog>
+        </div>
+        <div class="tab-content" id="tab-1">
+
+<div style="margin-bottom:16px;display:flex;gap:8px">
+    <button class="journal-subtab-btn" data-worker="all" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">הכל</button>
+    <button class="journal-subtab-btn" data-worker="לידור" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">לידור</button>
+    <button class="journal-subtab-btn" data-worker="ספיר" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">ספיר</button>
+    <button class="journal-subtab-btn" data-worker="מתן" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">מתן</button>
+    <button class="journal-subtab-btn" data-worker="done" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">משימות שבוצעו</button>
+</div>
+<script>
+// סנכרון אוטומטי של יומן משימות מחלקתי עם מעקב פרויקטים
+function syncJournalTable(workerFilter = 'all') {
+    const tbody = document.querySelector('#tasks-journal-table tbody');
+    tbody.innerHTML = '';
+    // טען ערכים שמורים מה-localStorage
+    let journalData = {};
+    try {
+        journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+    } catch (e) { journalData = {}; }
+
+    // שמירה על ערכים קיימים גם אם מפתח השורה השתנה (למשל שינוי שם לקוח, פרויקט, לוח, תאריך)
+    // נבנה מערך של כל המפתחות הישנים עם הפירוק שלהם
+    const oldKeysArr = [];
+    for (const key in journalData) {
+        const parts = key.split('|');
+        if (parts.length >= 4) {
+            oldKeysArr.push({key, parts});
+        }
+    }
+    // איסוף כל השורות ממעקב פרויקטים (פעילים + הסתיימו)
+    const activeRows = document.querySelectorAll('#projects-table-active tbody tr');
+    const doneRows = document.querySelectorAll('#projects-table-done tbody tr');
+    // לוגיקת select לעמודות 7-13 (עובדים בלבד, כולל "הסתיים" רק למתן)
+    // מתן: אפשר לבחור 'הסתיים' בכל עמודה 7-13
+    // לוגיקת select מיוחדת ללידור בעמודת שרטוט (7)
+    const selectHtml = (val, isMatan, colIdx, isLidor) => {
+        let opts = `<option value=""></option><option${val==="לידור"?" selected":''}>לידור</option><option${val==="ספיר"?" selected":''}>ספיר</option><option${val==="מתן"?" selected":''}>מתן</option>`;
+        if (isMatan) {
+            opts += `<option${val==="הסתיים"?" selected":''}>הסתיים</option>`;
+        }
+        // לוגיקה ללידור בעמודת שרטוט בלבד
+        if (isLidor && colIdx === 7) {
+            opts += `<option${val==="באישור לקוח"?" selected":''}>באישור לקוח</option>`;
+            if (val === "באישור לקוח" || val === "מאושר לביצוע") {
+                opts += `<option${val==="מאושר לביצוע"?" selected":''}>מאושר לביצוע</option>`;
+            }
+        }
+        return `<select class="journal-worker-select">${opts}</select>`;
+    };
+    // מיפוי בין אינדקס עמודה לשם העמודה (כפי שמופיע ב-th)
+    const colIndexToHeader = {
+        7: 'שרטוט',
+        8: 'מדבקות',
+        9: 'מהדקים',
+        10: 'גידים',
+        11: 'שלטים',
+        12: 'הרכבה',
+        13: 'AM'
+    };
+    // תת-לשונית משימות שבוצעו: שורות "מאושר לביצוע" בלידור/שרטוט או "הסתיים" במתן/ספיר
+    if (workerFilter === 'done') {
+        for (const key in journalData) {
+            const rowData = journalData[key];
+            let hasDone = false;
+            let isLidorApproved = false;
+            // לידור: רק אם col7 == "מאושר לביצוע"
+            if (rowData && rowData[`col7`] === 'מאושר לביצוע') {
+                hasDone = true;
+                isLidorApproved = true;
+            }
+            // מתן/ספיר: אם col7-13 == "הסתיים"
+            for (let i = 7; i <= 13; i++) {
+                if (rowData && rowData[`col${i}`] === 'הסתיים') {
+                    hasDone = true;
+                }
+            }
+            if (hasDone) {
+                const parts = key.split('|');
+                const row = document.createElement('tr');
+                let html = '';
+                html += `<td>${parts[0]}</td>`;
+                html += `<td>${parts[1]}</td>`;
+                html += `<td>${parts[2]}</td>`;
+                html += `<td>${parts[3]}</td>`;
+                html += `<td></td><td></td><td></td>`;
+                for (let i = 7; i <= 13; i++) {
+                    let val = rowData && rowData[`col${i}`];
+                    // לידור/שרטוט/מאושר לביצוע: הצג וי ירוק
+                    if (i === 7 && val === 'מאושר לביצוע' && isLidorApproved) {
+                        html += `<td data-col="7"><button class="done-check-btn-lidor" title="החזר לאישור לקוח" style="background:none;border:none;cursor:pointer;"><span style="color:green;font-size:1.5em;">✔️</span></button></td>`;
+                    } else if (val === 'הסתיים' && i >= 8) {
+                        html += `<td data-col="${i}"><button class="done-check-btn" title="העבר למשימות שבוצעו" style="background:none;border:none;cursor:pointer;"><span style="color:green;font-size:1.5em;">✔️</span></button></td>`;
+                    } else if (val === 'הסתיים') {
+                        html += `<td data-col="${i}">הסתיים</td>`;
+                    } else {
+                        html += `<td data-col="${i}"></td>`;
+                    }
+                }
+                row.innerHTML = html;
+                tbody.appendChild(row);
+            }
+        }
+        // מאזין לכפתורי וי ירוק לידור
+        tbody.querySelectorAll('.done-check-btn-lidor').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const tr = btn.closest('tr');
+                const tds = tr.querySelectorAll('td');
+                const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+                let journalData = {};
+                try {
+                    journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+                } catch (e) { journalData = {}; }
+                if (!journalData[key]) journalData[key] = {};
+                // החזר ל"באישור לקוח"
+                journalData[key][`col7`] = 'באישור לקוח';
+                localStorage.setItem('journalTasks', JSON.stringify(journalData));
+                syncJournalTable('done');
+                setTimeout(() => {
+                    document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]').click();
+                }, 150);
+            });
+        });
+        // מאזין לכפתורי וי ירוק רגילים (מתן/ספיר)
+        tbody.querySelectorAll('.done-check-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const tr = btn.closest('tr');
+                const tds = tr.querySelectorAll('td');
+                const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+                const td = btn.closest('td');
+                const colIdx = parseInt(td.getAttribute('data-col'));
+                let journalData = {};
+                try {
+                    journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+                } catch (e) { journalData = {}; }
+                if (!journalData[key]) journalData[key] = {};
+                journalData[key][`col${colIdx}`] = 'מתן';
+                localStorage.setItem('journalTasks', JSON.stringify(journalData));
+                syncJournalTable('done');
+                setTimeout(() => {
+                    document.querySelector('.journal-subtab-btn[data-worker="מתן"]').click();
+                }, 150);
+            });
+        });
+        return;
+    }
+    // תת לשונית לידור: רגיל, "באישור לקוח", "מאושר לביצוע"
+    let isLidorApproval = false;
+    if (workerFilter === 'lidor-approval') isLidorApproval = true;
+    [...activeRows, ...doneRows].forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= 4) {
+            const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+            let rowData = journalData[key];
+            if (!rowData) {
+                for (const old of oldKeysArr) {
+                    let matchCount = 0;
+                    for (let i = 0; i < 4; i++) {
+                        if (old.parts[i] === tds[i].innerText) matchCount++;
+                    }
+                    if (matchCount === 3) {
+                        rowData = journalData[old.key];
+                        journalData[key] = rowData;
+                        delete journalData[old.key];
+                        localStorage.setItem('journalTasks', JSON.stringify(journalData));
+                        break;
+                    }
+                }
+            }
+            // לוגיקה: לידור רגיל - שורות col7=="לידור"; לידור/באישור לקוח - col7=="באישור לקוח"; לידור/מאושר לביצוע - col7=="מאושר לביצוע"
+            let showRow = true;
+            if (workerFilter === 'לידור') {
+                showRow = false;
+                if (rowData && (rowData[`col7`] === 'לידור' || rowData[`col7`] === 'באישור לקוח')) showRow = true;
+            } else if (workerFilter === 'lidor-approval') {
+                showRow = false;
+                if (rowData && rowData[`col7`] === 'באישור לקוח') showRow = true;
+            } else if (workerFilter === 'מתן' || workerFilter === 'ספיר') {
+                showRow = false;
+                for (let i = 7; i <= 13; i++) {
+                    let val = rowData && rowData[`col${i}`];
+                    if (val === workerFilter || (workerFilter === 'מתן' && val === 'הסתיים')) {
+                        showRow = true;
+                        break;
+                    }
+                }
+            } else if (workerFilter !== 'all') {
+                showRow = false;
+                for (let i = 7; i <= 13; i++) {
+                    let val = rowData && rowData[`col${i}`];
+                    if (val === workerFilter) {
+                        showRow = true;
+                        break;
+                    }
+                }
+            }
+            if (showRow) {
+                const row = document.createElement('tr');
+                let html = '';
+                html += `<td>${tds[0].innerText}</td>`;
+                html += `<td>${tds[1].innerText}</td>`;
+                html += `<td>${tds[2].innerText}</td>`;
+                html += `<td>${tds[3].innerText}</td>`;
+                html += `<td></td><td></td><td></td>`;
+                for (let i = 7; i <= 13; i++) {
+                    let workerVal = (rowData && rowData[`col${i}`]) || '';
+                    const isMatan = (workerFilter === 'מתן');
+                    const isLidor = (workerFilter === 'לידור' || workerFilter === 'lidor-approval');
+                    // הצגת וי ירוק בכל תת-לשונית אם המשימה בוצעה ("הסתיים" או "מאושר לביצוע")
+                    if ((i === 7 && workerVal === 'מאושר לביצוע') || (i >= 8 && workerVal === 'הסתיים')) {
+                        // לידור/שרטוט/מאושר לביצוע: הצג וי ירוק עם כפתור רק בתת-לשונית משימות שבוצעו, בשאר תת-לשוניות הצג אייקון בלבד
+                        if (workerFilter === 'done') {
+                            if (i === 7 && workerVal === 'מאושר לביצוע') {
+                                html += `<td data-col="7"><button class="done-check-btn-lidor" title="החזר לאישור לקוח" style="background:none;border:none;cursor:pointer;"><span style="color:green;font-size:1.5em;">✔️</span></button></td>`;
+                            } else {
+                                html += `<td data-col="${i}"><button class="done-check-btn" title="העבר למשימות שבוצעו" style="background:none;border:none;cursor:pointer;"><span style="color:green;font-size:1.5em;">✔️</span></button></td>`;
+                            }
+                        } else {
+                            html += `<td data-col="${i}"><span style="color:green;font-size:1.5em;">✔️</span></td>`;
+                        }
+                    } else {
+                        html += `<td data-col="${i}"></td>`;
+                    }
+                }
+                row.innerHTML = html;
+                tbody.appendChild(row);
+                // מלא select בכל עמודה 7-13 (רק אם לא בוצע)
+                for (let i = 7; i <= 13; i++) {
+                    const td = row.querySelector(`td[data-col="${i}"]`);
+                    if (!td) continue;
+                    let workerVal = (rowData && rowData[`col${i}`]) || '';
+                    const isMatan = (workerFilter === 'מתן');
+                    const isLidor = (workerFilter === 'לידור' || workerFilter === 'lidor-approval');
+                    // אם כבר בוצע, אל תציג select
+                    if (!((i === 7 && workerVal === 'מאושר לביצוע') || (i >= 8 && workerVal === 'הסתיים'))) {
+                        td.innerHTML = selectHtml(workerVal, isMatan, i, isLidor);
+                    }
+                }
+            }
+        }
+    });
+    // מאזין לשינויים בתאי select ביומן משימות מחלקתי
+    tbody.querySelectorAll('.journal-worker-select').forEach((sel, idx) => {
+        sel.addEventListener('change', function(e) {
+            const tr = sel.closest('tr');
+            const tds = tr.querySelectorAll('td');
+            const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+            let journalData = {};
+            try {
+                journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+            } catch (e) { journalData = {}; }
+            if (!journalData[key]) journalData[key] = {};
+            let colIdx = Array.from(tr.children).indexOf(sel.parentElement);
+            journalData[key][`col${colIdx}`] = sel.value;
+            localStorage.setItem('journalTasks', JSON.stringify(journalData));
+            // לוגיקה מיוחדת ללידור/שרטוט
+            const activeSubtab = document.querySelector('.journal-subtab-btn[style*="background: var(--primary)"]');
+            if (activeSubtab && activeSubtab.dataset.worker === 'לידור' && colIdx === 7 && sel.value === 'באישור לקוח') {
+                setTimeout(() => {
+                    document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]').click();
+                }, 100);
+            } else if (activeSubtab && activeSubtab.dataset.worker === 'lidor-approval' && colIdx === 7 && sel.value === 'מאושר לביצוע') {
+                setTimeout(() => {
+                    document.querySelector('.journal-subtab-btn[data-worker="done"]').click();
+                }, 100);
+            } else if (activeSubtab && activeSubtab.dataset.worker === 'מתן' && sel.value === 'הסתיים') {
+                setTimeout(() => {
+                    document.querySelector('.journal-subtab-btn[data-worker="done"]').click();
+                }, 100);
+            }
+        });
+    });
+
+    // לוגיקת שמירת נתונים עבור עמודות 4,5,6 (מס עבודה-תכנית, כמות, הערות ללוח) ועמודות 7-13 (שרטוט, מדבקות, מהדקים וכו')
+    tbody.querySelectorAll('tr').forEach(tr => {
+        // עמודות 4,5: מס עבודה-תכנית, כמות
+        [4,5].forEach(colIdx => {
+            const td = tr.children[colIdx];
+            if (!td) return;
+            // הצגת ערך שמור אם קיים
+            const tds = tr.querySelectorAll('td');
+            const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+            let journalData = {};
+            try {
+                journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+            } catch (e) { journalData = {}; }
+            if (journalData[key] && journalData[key][`col${colIdx}`]) {
+                td.innerText = journalData[key][`col${colIdx}`];
+            }
+            td.ondblclick = function(e) {
+                if (td.querySelector('input')) return;
+                const oldVal = td.innerText;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = oldVal;
+                input.style.width = '95%';
+                td.innerText = '';
+                td.appendChild(input);
+                input.focus();
+                input.setSelectionRange(input.value.length, input.value.length);
+                input.onblur = input.onchange = function() {
+                    td.innerText = input.value;
+                    // שמירה ל-localStorage
+                    const tds = tr.querySelectorAll('td');
+                    const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+                    let journalData = {};
+                    try {
+                        journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+                    } catch (e) { journalData = {}; }
+                    if (!journalData[key]) journalData[key] = {};
+                    journalData[key][`col${colIdx}`] = input.value;
+                    localStorage.setItem('journalTasks', JSON.stringify(journalData));
+                };
+                input.addEventListener('keydown', function(ev) {
+                    if (ev.key === 'Enter') {
+                        input.blur();
+                    }
+                });
+            };
+        });
+
+        // עמודה 6: הערות ללוח
+        const notesTd = tr.children[6];
+        if (notesTd) {
+            notesTd.classList.add('journal-notes-cell');
+            // הצגת ערך שמור אם קיים
+            const tds = tr.querySelectorAll('td');
+            const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+            let journalData = {};
+            try {
+                journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+            } catch (e) { journalData = {}; }
+            if (journalData[key] && journalData[key][`col6`]) {
+                notesTd.innerText = journalData[key][`col6`];
+            }
+            // מסגרת אדומה אם יש טקסט
+            if (notesTd.innerText && notesTd.innerText.trim() !== '') {
+                notesTd.classList.add('has-notes');
+            } else {
+                notesTd.classList.remove('has-notes');
+            }
+            notesTd.ondblclick = function(e) {
+                // יצירת דיאלוג אם לא קיים
+                let dialog = document.getElementById('journal-notes-dialog');
+                if (!dialog) {
+                    dialog = document.createElement('dialog');
+                    dialog.id = 'journal-notes-dialog';
+                    dialog.innerHTML = `
+                        <form method="dialog" style="min-width:340px">
+                            <h3>עריכת הערות ללוח</h3>
+                            <textarea style="width:100%;height:120px;font-size:1.35em;resize:vertical;line-height:1.6;" id="journal-notes-textarea"></textarea>
+                            <menu style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end">
+                                <button type="submit">שמור</button>
+                                <button type="button" id="journal-notes-cancel">ביטול</button>
+                            </menu>
+                        </form>
+                    `;
+                    document.body.appendChild(dialog);
+                }
+                const textarea = dialog.querySelector('#journal-notes-textarea');
+                textarea.value = notesTd.innerText;
+                dialog.showModal();
+                textarea.focus();
+                // שמירה
+                dialog.querySelector('form').onsubmit = function(ev) {
+                    ev.preventDefault();
+                    notesTd.innerText = textarea.value;
+                    // מסגרת אדומה אם יש טקסט
+                    if (textarea.value && textarea.value.trim() !== '') {
+                        notesTd.classList.add('has-notes');
+                    } else {
+                        notesTd.classList.remove('has-notes');
+                    }
+                    // שמירה ל-localStorage
+                    const tds = tr.querySelectorAll('td');
+                    const key = [tds[0].innerText, tds[1].innerText, tds[2].innerText, tds[3].innerText].join('|');
+                    let journalData = {};
+                    try {
+                        journalData = JSON.parse(localStorage.getItem('journalTasks') || '{}');
+                    } catch (e) { journalData = {}; }
+                    if (!journalData[key]) journalData[key] = {};
+                    journalData[key][`col6`] = textarea.value;
+                    localStorage.setItem('journalTasks', JSON.stringify(journalData));
+                    dialog.close();
+                };
+                dialog.querySelector('#journal-notes-cancel').onclick = function() {
+                    dialog.close();
+                };
+            };
+        }
+
+        // עמודות 7-13: שרטוט, מדבקות, מהדקים וכו' (שמירה כבר קיימת בלולאת select)
+        // אין צורך לשנות כאן
+    });
+}
+// קריאה ראשונית וסנכרון אוטומטי אחרי כל שינוי
+window.addEventListener('DOMContentLoaded', function() {
+    // הוספת כפתור לתת-לשונית לידור/באישור לקוח אם לא קיים
+    if (!document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]')) {
+        const lidorBtn = document.querySelector('.journal-subtab-btn[data-worker="לידור"]');
+        const approvalBtn = document.createElement('button');
+        approvalBtn.className = 'journal-subtab-btn';
+        approvalBtn.dataset.worker = 'lidor-approval';
+        approvalBtn.style.background = 'var(--primary-light)';
+        approvalBtn.style.border = 'none';
+        approvalBtn.style.padding = '8px 18px';
+        approvalBtn.style.borderRadius = '6px';
+        approvalBtn.style.cursor = 'pointer';
+        approvalBtn.style.fontWeight = '500';
+        approvalBtn.innerText = 'באישור לקוח (לידור)';
+        approvalBtn.style.display = 'none'; // start hidden
+        lidorBtn.parentNode.insertBefore(approvalBtn, lidorBtn.nextSibling);
+    }
+    syncJournalTable();
+    // תת לשוניות ביומן
+    const subtabBtns = Array.from(document.querySelectorAll('.journal-subtab-btn'));
+    const lidorBtn = document.querySelector('.journal-subtab-btn[data-worker="לידור"]');
+    const approvalBtn = document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]');
+    subtabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            subtabBtns.forEach(b=>b.style.background='var(--primary-light)');
+            btn.style.background = 'var(--primary)';
+            // Show/hide 'באישור לקוח (לידור)' subtab only when 'לידור' is active
+            if (btn.dataset.worker === 'לידור') {
+                if (approvalBtn) approvalBtn.style.display = '';
+            } else {
+                if (approvalBtn) approvalBtn.style.display = 'none';
+            }
+            syncJournalTable(btn.dataset.worker);
+        });
+    });
+    // ברירת מחדל: הכל
+    document.querySelector('.journal-subtab-btn[data-worker="all"]').style.background = 'var(--primary)';
+    // Hide 'באישור לקוח (לידור)' on load
+    if (approvalBtn) approvalBtn.style.display = 'none';
+});
+// עוטף את הפונקציות הרלוונטיות לעדכון אוטומטי
+const origAddProjectRow = window.addProjectRow;
+window.addProjectRow = function(data, skipSave) {
+    origAddProjectRow(data, skipSave);
+    syncJournalTable();
+};
+const origUpdateProjectRow = window.updateProjectRow;
+window.updateProjectRow = function(tr, data) {
+    origUpdateProjectRow(tr, data);
+    syncJournalTable();
+};
+const origDeleteProjectRow = window.deleteProjectRow;
+window.deleteProjectRow = function(tr) {
+    origDeleteProjectRow(tr);
+    syncJournalTable();
+};
+</script>
+            <table id="tasks-journal-table">
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם לקוח</th>
+                        <th>שם פרויקט</th>
+                        <th>שם לוח</th>
+                        <th>מס עבודה-תכנית</th>
+                        <th>כמות</th>
+                        <th>הערות ללוח</th>
+                        <th>שרטוט</th>
+                        <th>מדבקות</th>
+                        <th>מהדקים</th>
+                        <th>גידים</th>
+                        <th>שלטים</th>
+                        <th>הרכבה</th>
+                        <th>AM</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="tab-content" id="tab-2">
+            <table id="projects-table-done">
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם לקוח</th>
+                        <th>שם פרוייקט</th>
+                        <th>שם לוח</th>
+                        <th>שם עובד</th>
+                        <th>סטטוס</th>
+                        <th>סטטוס שלילי</th>
+                        <th>סטטוס שלילי 2</th>
+                        <th>סטטוס שלילי 3</th>
+                        <th>הערות</th>
+                        <th>טופל</th>
+                        <th>נמסר</th>
+                        <th>הסתיים</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        function showTab(idx) {
+            document.querySelectorAll('.tab').forEach((el, i) => {
+                el.classList.toggle('active', i === idx);
+            });
+            document.querySelectorAll('.tab-content').forEach((el, i) => {
+                el.classList.toggle('active', i === idx);
+            });
+        }
+
+        // רשימות נפתחות מעודכנות
+        const clients = [
+            "שמוליק",
+            "החץ הבונה",
+            "דמה",
+            "הבית החכם LOG-IN",
+            "מוצרי חשמל רבי",
+            "עמי שרותי חשמל",
+            "ע.מ.ו. בניה",
+            "אל אר פרוייקטים",
+            "גצלר ביקסנשפנר",
+            "א.מ.רון",
+            "פסגות",
+            "א.ש.ירושלמי",
+            "חשמל הרצל",
+            "אלישיר עבודות חשמל",
+            "א.ש.עוצמת החשמל",
+            "שתית הנדסה בע\"מ",
+            "א.מולין בע\"מ",
+            "כמאל עתמנאה",
+            "איהב נכאש",
+            "הספל רועי",
+            "א.א. נידל",
+            "רמי עבודות חשמל ותקשורת",
+            "עימאד כנעני",
+            "הצבי קירור ומזוג אויר",
+            "אביב אספקה טכנית",
+            "תומר ברוש",
+            "שאל ציוד טכני",
+            "פזה אחרת",
+            "חשמל הברק",
+            "א.צום בע\"מ",
+            "עשר חשמל בע\"מ",
+            "דייב עתמנא",
+            "הנדסת ספיקה",
+            "גיא משאבות",
+            "אל אי קבלנות",
+            "מדן סחר",
+            "ח.א.מערכות חשמל",
+            "ע.י.הנדסת מים",
+            "א.דגנים",
+            "שלום גרבי",
+            "שאל צפון - מערכת מים",
+            "ח.ראמא",
+            "זאב הורוביץ",
+            "אור שי בע\"מ",
+            "סופר אלוני",
+            "ב.מ.משאבות",
+            "טיב אור",
+            "אבו חרירי עמד",
+            "רפי-ו.שיווק ואספקה",
+            "לויק שירותי תאורה",
+            "עמוס",
+            "עירית תל אביב",
+            "נר בקרה",
+            "המניע משאבות",
+            "אונליק",
+            "וינברג אברהם",
+            "מוזיאון המדע ירושליים",
+            "המניע משאבות בע\"מ",
+            "זייד",
+            "א.א.תשתיות עפר ",
+            "תדהר",
+            "איסמעיל",
+            "אבנר צדוק פלגים",
+            "גרין ליין",
+            "סואד נאטור",
+            "חשמל מנשה",
+            "חיים",
+            "חשמל נעמן אדים",
+            "ציון חודרה",
+            "דוסטרה עבודות חשמל",
+            "דניה סיבוס",
+            "סליל המנוע",
+            "חשמל לכל",
+            "גיאו דניה",
+            "עמר",
+            "מאיר עבודות בנין ןתעשיה",
+            "מכון וולקני",
+            "חמדן עומר ס.ע.ר חשמל",
+            "י.נ. עבודות חשמל נעם יוסף",
+            "אלטק",
+            "ש.רא.ל בע\"מ",
+            "מונטק מערכות בקרה",
+            "נטול פדיל",
+            "חשמל אבי",
+            "ליימן עמית",
+            "שמואל מור חיים",
+            "ש.גוזמן ובניו",
+            "אושרי",
+            "א.אנרגית חשמל",
+            "חשמל השחר",
+            "ס.ר.י ",
+            "רמות יודאיקה יבוא יצוא",
+            "יוניק מערכות",
+            "רשף עבודות חשמל",
+            "בן שגיא",
+            "אברהם ששון",
+            "אוריון",
+            "ב.ק.ר פרויקטים בע\"מ",
+            "שון רון",
+            "ש.א.ם",
+            "שרעבי",
+            "אבו ליל חשמל",
+            "מרכז טכנולוגיות",
+            "פדיל",
+            "אשר בטיטו ",
+            "מחל משאבות",
+            "י.ש חשמל בע\"מ",
+            "רון שמעון חשמל ותקשורת",
+            "חשמל זאב",
+            "גני בר",
+            "מולכו קארין",
+            "א.ש פרויקטים",
+            "ויטלי לונגו",
+            "השפלת מי תהום LDDWJ",
+            "ערן לבני בע\"מ",
+            "פסקריו ושות-משאבות מים בע\"מ",
+            "שי זיגדון",
+            "דודו מערכות ומשאבות מיים",
+            "סקופ מתכות - המניע משאבות",
+            "יניב קטן",
+            "רונטל הנדסה",
+            "יוסי לוי חשמל",
+            "עדן סרש התקנות (מיכאל התקנות)",
+            "ש.אל ציוד טכני בע\"מ",
+            "גרינפלד חיים משאבות",
+            "אסטל מיזוג אויר",
+            "אפקון בקרה",
+            "זרם מיים בע\"מ",
+            "מאיר שירותי חשמל",
+            "גלביט הנדסה בע\"מ",
+            "שיכון ובינוי סולל בונה",
+            "אלקטרה ME",
+            "נאור הנדסת חשמל",
+            "אבי מזרחי",
+            "א.ל. יזמות",
+            "אלי רוסמן",
+            "ליסוגורסקי גרגורי",
+            "נווה רעיה (א.ז. 2006) בע\"מ",
+            "דור מערכות הנעה בע\"מ",
+            "בטא הנדסת חשמל",
+            "א.ש. חשמל",
+            "גרינקו אנרג'י בע\"מ",
+            "חן אזולאי שירותי חשמל",
+            "א.ל. אראל הנדסת מיזוג אויר בע\"מ",
+            "משה א.ס חשמל",
+            "מילניום קירור ומיזוג אויר בע\"מ",
+            "חליל יוסף בע\"מ",
+            "שרון בראון",
+            "ח.ל.צ - חשמלאי לעת צרה",
+            "כעין החשמל",
+            "אקסייט ישראל פרוייקטים בעמ",
+            "יניב עמר",
+            "אלתן הנדסה אזרחית בעמ",
+            "קונטאל אלקטרומכניקה בעמ",
+            "שמדר הנדסה ובניין בע\"מ",
+            "אריאל גבאי",
+            "דודו שירותי חשמל",
+            "שהם משאבות ויפעת",
+            "חברת הגיחון בע\"מ",
+            "קונטל אוטמציה ובקרה בע\"מ",
+            "חכימיאן דני - שירותי חשמל",
+            "בית חולים הלל יפה",
+            "אלדוחה מרקט שיווק מזון",
+            "אלקטרה בע\"מ",
+            "איי.די.אי. טכנולוגיות בע\"מ IDE",
+            "קינג בירינג",
+            "אמידן יצוא יבוא",
+            "איתן הנדסת מים בע\"מ",
+            "שרות הוגן בע\"מ",
+            "נירלט צבעים בע\"מ",
+            "AMP",
+            "שמואל מלמד",
+            "מפטגון",
+            "אשקריט",
+            "דור משאבות",
+            "סרגוסטים בע\"מ",
+            "נייטיב טק בעמ",
+            "יוסיקור בע\"מ",
+            "אול אי ווטר בעמ",
+            "אנלייט אנרגיה מתחדשת בע\"מ",
+            "הקוטב הצפוני פרוייקטים בע\"מ",
+            "א.ב תחזוקה ושיפוצים",
+            "אסנת חברה לעבודות קבלניות בעמ",
+            "א.ל הנדסת חשמל ותאורה",
+            "נחושתן ג'ורג' אהרון",
+            "צ'יינה",
+            "זרעים טכנולוגיות",
+            "China rail way tunnel group co. ltd",
+            "Bright source"
+        ];
+        const workers = [
+            "מוהנד", "לידור", "ספיר", "מתן", "איציק", "ישראל", "אליהו", "עידו", "סמואל", "ליאוניד", "ניקולאי", "גרישה", "ראובן"
+        ];
+        const statusOptions = [
+            "הזמנה חדשה",
+            "בתכנון",
+            "בשרטוט",
+            "באישור לקוח",
+            "ממתין לשיבוץ",
+            "בייצור",
+            "בבדיקה",
+            "ממתין לאיסוף"
+        ];
+        const negativeStatuses = [
+            "חסר ציוד",
+            "חסר מבנה",
+            "חסר שילוט",
+            "כשלים בבדיקה",
+            "ממתין ל AM"
+        ];
+
+        // דיאלוג הוספה/עריכה
+        let editRow = null;
+        function fillDialogSelect(id, options) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = `<option value="" disabled selected hidden></option>` + options.map(opt => `<option>${opt}</option>`).join('');
+        }
+
+        function openProjectDialog(row = null) {
+            editRow = row;
+            const dialog = document.getElementById('project-dialog');
+            const form = document.getElementById('project-form');
+            form.reset();
+            // מילוי דינמי של הרשימות
+            fillDialogSelect('dialog-client', clients);
+            fillDialogSelect('dialog-worker', workers);
+            fillDialogSelect('dialog-status', statusOptions);
+            fillDialogSelect('dialog-neg1', negativeStatuses);
+            fillDialogSelect('dialog-neg2', negativeStatuses);
+            fillDialogSelect('dialog-neg3', negativeStatuses);
+            document.getElementById('dialog-title').innerText = row ? 'ערוך פרוייקט' : 'הוסף פרוייקט';
+            form.querySelector('#dialog-save').innerText = row ? 'שמור' : 'הוסף';
+            if (row) {
+                const cells = row.querySelectorAll('td');
+                form.client.value = cells[1].innerText;
+                form.projectName.value = cells[2].innerText;
+                form.boardName.value = cells[3].innerText;
+                form.worker.value = cells[4].innerText;
+                form.status.value = cells[5].innerText;
+                form.neg1.value = cells[6].innerText;
+                form.neg2.value = cells[7].innerText;
+                form.neg3.value = cells[8].innerText;
+                form.notes.value = cells[9].innerText;
+                form.treated.checked = cells[10].querySelector('input').checked;
+                form.delivered.checked = cells[11].querySelector('input').checked;
+                form.finished.checked = cells[12].querySelector('input').checked;
+            }
+            dialog.showModal();
+        }
+
+        function closeProjectDialog() {
+            document.getElementById('project-dialog').close();
+            editRow = null;
+        }
+
+        document.getElementById('project-form').onsubmit = function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                date: new Date().toLocaleDateString('he-IL'),
+                client: form.client.value,
+                projectName: form.projectName.value,
+                boardName: form.boardName.value,
+                worker: form.worker.value,
+                status: form.status.value,
+                neg1: form.neg1.value,
+                neg2: form.neg2.value,
+                neg3: form.neg3.value,
+                notes: form.notes.value,
+                treated: form.treated.checked,
+                delivered: form.delivered.checked,
+                finished: form.finished.checked
+            };
+            if (editRow) {
+                updateProjectRow(editRow, data);
+            } else {
+                addProjectRow(data);
+            }
+            closeProjectDialog();
+        };
+
+        function addProjectRow(data, skipSave = false) {
+            const tbody = data.finished ? document.querySelector('#projects-table-done tbody') : document.querySelector('#projects-table-active tbody');
+            const tr = document.createElement('tr');
+            fillProjectRow(tr, data);
+            tbody.appendChild(tr);
+            if (!skipSave) saveProjectsToStorage();
+        }
+
+        function updateProjectRow(tr, data) {
+            fillProjectRow(tr, data);
+            saveProjectsToStorage();
+        }
+
+        function fillProjectRow(tr, data) {
+            // notes cell: add class and red border if not empty
+            let notesClass = 'project-notes-cell';
+            if (data.notes && data.notes.trim() !== '') notesClass += ' has-notes';
+            tr.innerHTML = `
+                <td>${data.date}</td>
+                <td>${data.client}</td>
+                <td>${data.projectName}</td>
+                <td>${data.boardName}</td>
+                <td class="editable-select" data-type="worker">${data.worker}</td>
+                <td class="editable-select" data-type="status">${data.status}</td>
+                <td class="editable-select" data-type="neg1">${data.neg1}</td>
+                <td class="editable-select" data-type="neg2">${data.neg2}</td>
+                <td class="editable-select" data-type="neg3">${data.neg3}</td>
+                <td class="${notesClass}">${data.notes || ''}</td>
+                <td><input type="checkbox" ${data.treated ? 'checked' : ''} onchange="onCheckBoxChange(this)"></td>
+                <td><input type="checkbox" ${data.delivered ? 'checked' : ''} onchange="onCheckBoxChange(this)"></td>
+                <td><input type="checkbox" ${data.finished ? 'checked' : ''} onchange="onCheckBoxChange(this)"></td>
+                <td>
+                    <button class="action-btn edit-btn" title="ערוך" onclick="openProjectDialog(this.parentElement.parentElement)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25z" fill="currentColor"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="action-btn delete-btn" title="מחק" onclick="deleteProjectRow(this.parentElement.parentElement)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="action-btn duplicate-btn" title="שכפל" onclick="duplicateProjectRow(this.parentElement.parentElement)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" fill="currentColor"/></svg>
+                    </button>
+                </td>
+            `;
+        }
+        // דיאלוג עריכת הערות במעקב פרויקטים (פעילים והסתיימו)
+        function enableProjectNotesDialog(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            table.addEventListener('dblclick', function(e) {
+                const td = e.target.closest('.project-notes-cell');
+                if (!td) return;
+                const tr = td.parentElement;
+                // יצירת דיאלוג אם לא קיים
+                let dialog = document.getElementById('project-notes-dialog');
+                if (!dialog) {
+                    dialog = document.createElement('dialog');
+                    dialog.id = 'project-notes-dialog';
+                    dialog.innerHTML = `
+                        <form method="dialog" style="min-width:340px">
+                            <h3>עריכת הערות</h3>
+                            <textarea style="width:100%;height:120px;font-size:1.35em;resize:vertical;line-height:1.6;" id="project-notes-textarea"></textarea>
+                            <menu style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end">
+                                <button type="submit">שמור</button>
+                                <button type="button" id="project-notes-cancel">ביטול</button>
+                            </menu>
+                        </form>
+                    `;
+                    document.body.appendChild(dialog);
+                }
+                const textarea = dialog.querySelector('#project-notes-textarea');
+                textarea.value = td.innerText;
+                dialog.showModal();
+                textarea.focus();
+                // שמירה
+                dialog.querySelector('form').onsubmit = function(ev) {
+                    ev.preventDefault();
+                    td.innerText = textarea.value;
+                    // מסגרת אדומה אם יש טקסט
+                    if (textarea.value && textarea.value.trim() !== '') {
+                        td.classList.add('has-notes');
+                    } else {
+                        td.classList.remove('has-notes');
+                    }
+                    // שמירה ל-localStorage
+                    saveProjectsToStorage();
+                    dialog.close();
+                };
+                dialog.querySelector('#project-notes-cancel').onclick = function() {
+                    dialog.close();
+                };
+            });
+        }
+
+        // הפעלת דיאלוג הערות על שתי הטבלאות
+        enableProjectNotesDialog('projects-table-active');
+        enableProjectNotesDialog('projects-table-done');
+        // עיצוב תא הערות במעקב פרויקטים (כמו ביומן)
+        const style = document.createElement('style');
+        style.innerHTML = `
+        #projects-table-active td.project-notes-cell,
+        #projects-table-done td.project-notes-cell {
+            max-width: 140px;
+            min-width: 80px;
+            width: 120px;
+            max-height: 38px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            word-break: break-all;
+            transition: border 0.2s, border-radius 0.2s;
+        }
+        #projects-table-active td.project-notes-cell.has-notes,
+        #projects-table-done td.project-notes-cell.has-notes {
+            border: 2px solid red !important;
+            border-radius: 8px !important;
+        }
+        `;
+        document.head.appendChild(style);
+
+        // שינוי מצב וי בטופל/נמסר/הסתיים
+        function onCheckBoxChange(checkbox) {
+            const tr = checkbox.closest('tr');
+            const tds = tr.querySelectorAll('td');
+            let treated = false, delivered = false, finished = false;
+            if (tds[10] && tds[10].querySelector('input')) treated = tds[10].querySelector('input').checked;
+            if (tds[11] && tds[11].querySelector('input')) delivered = tds[11].querySelector('input').checked;
+            if (tds[12] && tds[12].querySelector('input')) finished = tds[12].querySelector('input').checked;
+            const data = {
+                date: tds[0].innerText,
+                client: tds[1].innerText,
+                projectName: tds[2].innerText,
+                boardName: tds[3].innerText,
+                worker: tds[4].innerText,
+                status: tds[5].innerText,
+                neg1: tds[6].innerText,
+                neg2: tds[7].innerText,
+                neg3: tds[8].innerText,
+                notes: tds[9].innerText,
+                treated,
+                delivered,
+                finished
+            };
+            // רק אם הסתיים השתנה - מעבירים בין הטבלאות
+            const isDoneTable = tr.closest('table').id === 'projects-table-done';
+            if ((isDoneTable && !finished) || (!isDoneTable && finished)) {
+                tr.remove();
+                addProjectRow(data);
+            } else {
+                fillProjectRow(tr, data);
+            }
+            saveProjectsToStorage();
+        }
+
+        // עריכה ישירה של תאים נבחרים
+        document.addEventListener('click', function(e) {
+            const td = e.target.closest('.editable-select');
+            if (!td || td.querySelector('select')) return;
+            let options = [];
+            switch (td.dataset.type) {
+                case 'worker': options = workers; break;
+                case 'status': options = statusOptions; break;
+                case 'neg1':
+                case 'neg2':
+                case 'neg3': options = negativeStatuses; break;
+            }
+            const current = td.textContent;
+            const select = document.createElement('select');
+            select.innerHTML = `<option value=""${current===''?' selected':''}></option>` + options.map(opt => `<option${opt===current?' selected':''}>${opt}</option>`).join('');
+            td.textContent = '';
+            td.appendChild(select);
+            select.focus();
+            select.addEventListener('blur', saveSelectChange);
+            select.addEventListener('change', saveSelectChange);
+            function saveSelectChange() {
+                td.textContent = select.value;
+                saveProjectsToStorage();
+            }
+        });
+
+        function deleteProjectRow(tr) {
+            tr.remove();
+            saveProjectsToStorage();
+        }
+
+        function duplicateProjectRow(tr) {
+            const cells = tr.querySelectorAll('td');
+            const data = {
+                date: new Date().toLocaleDateString('he-IL'),
+                client: cells[1].innerText,
+                projectName: cells[2].innerText,
+                boardName: cells[3].innerText,
+                worker: cells[4].innerText,
+                status: cells[5].innerText,
+                neg1: cells[6].innerText,
+                neg2: cells[7].innerText,
+                neg3: cells[8].innerText,
+                notes: cells[9].innerText,
+                treated: cells[10].querySelector('input').checked,
+                delivered: cells[11].querySelector('input').checked,
+                finished: cells[12].querySelector('input').checked
+            };
+            addProjectRow(data);
+        }
+
+        // שמירה וטעינה מ-localStorage
+        function saveProjectsToStorage() {
+            const getRows = (tbody) => Array.from(tbody.querySelectorAll('tr')).map(tr => {
+                const cells = tr.querySelectorAll('td');
+                return {
+                    date: cells[0].innerText,
+                    client: cells[1].innerText,
+                    projectName: cells[2].innerText,
+                    boardName: cells[3].innerText,
+                    worker: cells[4].innerText,
+                    status: cells[5].innerText,
+                    neg1: cells[6].innerText,
+                    neg2: cells[7].innerText,
+                    neg3: cells[8].innerText,
+                    notes: cells[9].innerText,
+                    treated: cells[10].querySelector('input').checked,
+                    delivered: cells[11].querySelector('input').checked,
+                    finished: cells[12].querySelector('input').checked
+                };
+            });
+            const active = getRows(document.querySelector('#projects-table-active tbody'));
+            const done = getRows(document.querySelector('#projects-table-done tbody'));
+            const projects = [...active, ...done];
+            localStorage.setItem('projects', JSON.stringify(projects));
+        }
+
+        function loadProjectsFromStorage() {
+            const data = localStorage.getItem('projects');
+            if (data) {
+                const projects = JSON.parse(data);
+                projects.forEach(p => addProjectRow(p, true));
+            }
+        }
+
+        // טען פרויקטים בשיגור הדף
+        window.addEventListener('DOMContentLoaded', function() {
+            loadProjectsFromStorage();
+            syncJournalTable();
+        });
+    </script>
+</body>
+</html>
