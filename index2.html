@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <link rel="stylesheet" href="main.css">
+    <meta charset="UTF-8">
+    <title>ניהול משרד גלביט הנדסה</title>
+    <script type="module" src="frontend/modules/projectTable.js"></script>
+    <script type="module" src="frontend/modules/unsynced.js"></script>
+    <script type="module" src="frontend/modules/productionTracking.js"></script>
+    <script type="module" src="frontend/modules/journalUI.js"></script>
+    <style>
+        :root {
+            --main-bg: #eaf6fb;
+            --container-bg: #ffffff;
+            --primary: #4fc3f7;
+            --primary-dark: #039be5;
+            --primary-light: #b3e5fc;
+            --tab-active: #e3f2fd;
+            --tab-inactive: #b3e5fc33;
+            --border: #b3e5fc;
+            --text: #1a3557;
+            --shadow: 0 2px 12px #4fc3f722;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: var(--main-bg);
+            margin: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            background: var(--container-bg);
+            padding: 16px 0 0 0; /* ללא ריפוד צדדי כדי לאפשר לטבלאות להתפרס על כל הרוחב */
+            border-radius: 0;
+            box-shadow: none;
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary-dark);
+            font-size: 2.3em;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 28px;
+            background: var(--tab-inactive);
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+        }
+        .tab {
+            flex: 1;
+            padding: 14px 0;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1.13em;
+            color: var(--text);
+            transition: background 0.2s, color 0.2s;
+            font-weight: 500;
+        }
+        .tab.active {
+            background: var(--tab-active);
+            color: var(--primary-dark);
+            border-bottom: 3px solid var(--primary);
+            font-weight: bold;
+        }
+        .tab:not(.active):hover {
+            background: var(--primary-light);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadein 0.3s;
+            padding: 0 8px; /* מעט מרווח לצדדים בלי לפגוע ברוחב הטבלאות */
+        }
+        @keyframes fadein {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+            background: #fafdff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 6px #4fc3f71a;
+        }
+        /* Project tables column sizing & overflow control */
+        #projects-table-active, #projects-table-done { table-layout: auto; }
+        #projects-table-active th:nth-child(1), #projects-table-active td:nth-child(1),
+        #projects-table-done th:nth-child(1), #projects-table-done td:nth-child(1) {
+            width: 85px; max-width: 90px; white-space: nowrap; }
+        /* Clip long text in first textual columns */
+        #projects-table-active th:nth-child(2), #projects-table-active td:nth-child(2),
+        #projects-table-active th:nth-child(3), #projects-table-active td:nth-child(3),
+        #projects-table-active th:nth-child(4), #projects-table-active td:nth-child(4),
+        #projects-table-done th:nth-child(2), #projects-table-done td:nth-child(2),
+        #projects-table-done th:nth-child(3), #projects-table-done td:nth-child(3),
+        #projects-table-done th:nth-child(4), #projects-table-done td:nth-child(4) {
+            max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Inputs & selects inside project tables: no overflow, compact padding */
+        #projects-table-active td input[type=text], #projects-table-active td select,
+        #projects-table-done td input[type=text], #projects-table-done td select {
+            box-sizing: border-box; padding: 2px 4px; margin: 0; width: 100%; font-size: 0.92em; }
+        /* Ensure negative status wrappers stretch full cell width */
+        #projects-table-active td .neg-color-wrap, #projects-table-done td .neg-color-wrap { width: 100% !important; display: block; }
+        /* Prevent buttons row from stretching cell undesirably */
+        #projects-table-active td:last-child .row-actions, #projects-table-done td:last-child .row-actions { justify-content: center; }
+        /* Slightly reduce overall cell horizontal padding to gain space */
+        #projects-table-active td, #projects-table-done td { padding-left:4px; padding-right:4px; }
+        /* LTR alignment for date input so numbers align nicely */
+        #projects-table-active td:nth-child(1) input[type=text], #projects-table-done td:nth-child(1) input[type=text] { direction:ltr; text-align:center; }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 0 6px; /* גובה מינימלי לשורות */
+            text-align: center;
+            font-size: 1em;
+            line-height: 1.15;
+        }
+    tr.child-row td { padding: 2px 4px; font-size: 0.92em; line-height:1.05; }
+    tr.parent-row td { background:#f5faff; font-weight:500; }
+        /* עיצוב תא הערות ללוח ביומן משימות מחלקתי */
+        #tasks-journal-table td.journal-notes-cell {
+            max-width: 140px;
+            min-width: 80px;
+            width: 120px;
+            max-height: 38px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            word-break: break-all;
+            transition: border 0.2s, border-radius 0.2s;
+        }
+        #tasks-journal-table td.journal-notes-cell.has-notes {
+            border: 2px solid red !important;
+            border-radius: 8px !important;
+        }
+        th {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 600;
+            padding: 2px 6px;
+        }
+        tr:nth-child(even) {
+            background: #eaf6fb;
+        }
+        tr:nth-child(odd) {
+            background: #fafdff;
+        }
+        .add-row-btn {
+            margin: 15px 0 0 0;
+            padding: 10px 28px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 1.08em;
+            font-weight: 500;
+            box-shadow: 0 1px 4px #4fc3f722;
+            transition: background 0.2s;
+        }
+        .add-row-btn:hover {
+            background: var(--primary-dark);
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 7px 5px;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            font-size: 1em;
+            background: #fafdff;
+            margin-bottom: 4px;
+        }
+        input[type="checkbox"] {
+            transform: scale(1.25);
+            accent-color: var(--primary);
+        }
+        button {
+            font-family: inherit;
+        }
+    td .action-btn { margin:0 1px; width:28px; height:28px; border-radius:6px; border:1px solid #cfd8dc; background:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:15px; line-height:1; padding:0; transition:background .15s,border-color .15s; }
+    td .action-btn:hover { background:#e3f2fd; border-color:#90caf9; }
+    td .action-btn.edit-btn { color:#1976d2; }
+    td .action-btn.delete-btn { color:#d32f2f; }
+    td .action-btn.duplicate-btn { color:#388e3c; }
+        dialog {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px #4fc3f744;
+            padding: 24px 30px 18px 30px;
+            background: #fafdff;
+            min-width: 340px;
+        }
+        dialog::backdrop {
+            background: #4fc3f733;
+        }
+        #project-form label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text);
+            font-size: 1em;
+        }
+        #project-form input[type="text"] {
+            margin-bottom: 0;
+        }
+        #project-form menu {
+            margin-top: 18px;
+        }
+        #project-form button[type="submit"] {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #project-form button[type="submit"]:hover {
+            background: var(--primary-dark);
+        }
+        #project-form button[type="button"] {
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #project-form button[type="button"]:hover {
+            background: #bdbdbd;
+        }
+    /* Parent-Child hierarchy styling */
+    tr.parent-row td { background: #f8fafc; border-top: 2px solid #e2e8f0; }
+    .parent-bar { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .parent-bar .sep { color: #94a3b8; }
+    .parent-bar .muted { color: #64748b; }
+    .parent-bar .flex { flex: 1 1 auto; }
+    .collapse-btn { border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+    tr.child-row td:first-child { padding-right: 18px; }
+    </style>
+</head>
+<body>
+    <!-- LEGACY_FORM הוסר: הטופס מנוהל במודולים -->
+    <script type="module" src="frontend/main.js"></script>
+    <div class="container">
+        <h1>ניהול משרד גלביט הנדסה</h1>
+                <div class="tabs">
+                        <button class="tab active" onclick="showTab(0)">מעקב פרויקטים</button>
+                        <button class="tab" onclick="showTab(1)">יומן משימות</button>
+                        <button class="tab" onclick="showTab(2)">מעקב ייצור</button>
+                        <button class="tab" onclick="showTab(3)">פרויקטים שהסתיימו</button>
+                </div>
+                <!-- TAB 0: מעקב פרויקטים (Active) -->
+                <div class="tab-content active" id="tab-0">
+                    <div style="margin-top:16px;">
+                        <button class="add-row-btn" onclick="openProjectDialog()">הוסף פרויקט</button>
+                    </div>
+                    <table id="projects-table-active">
+                        <thead>
+                            <tr>
+                                <th>תאריך</th>
+                                <th>שם לקוח</th>
+                                <th>שם פרוייקט</th>
+                                <th>שם לוח</th>
+                                <th>שם עובד</th>
+                                <th>סטטוס</th>
+                                <th>סטטוס שלילי</th>
+                                <th>סטטוס שלילי 2</th>
+                                <th>סטטוס שלילי 3</th>
+                                <th>הערות</th>
+                                <th>טופל</th>
+                                <th>נמסר</th>
+                                <th>הסתיים</th>
+                                <th>פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <!-- TAB 1: יומן משימות -->
+                <div class="tab-content" id="tab-1">
+                    <!-- Journal Subtabs -->
+                    <div id="journal-subtabs" style="margin-bottom:16px;display:flex;gap:8px;align-items:center">
+                        <button class="journal-subtab-btn" data-worker="all" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">הכל</button>
+                        <button class="journal-subtab-btn" data-worker="לידור" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">לידור</button>
+                        <button class="journal-subtab-btn" data-worker="ספיר" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">ספיר</button>
+                        <button class="journal-subtab-btn" data-worker="מתן" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">מתן</button>
+                        <button class="journal-subtab-btn" data-worker="done" style="background:var(--primary-light);border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:500;">משימות שבוצעו</button>
+                    </div>
+                    <table id="tasks-journal-table">
+            <thead>
+                <tr>
+                    <th>תאריך</th>
+                    <th>שם לקוח</th>
+                    <th>שם פרויקט</th>
+                    <th>שם לוח</th>
+                    <th>כמות</th>
+                    <th>הערות ללוח</th>
+                    <th>שרטוט</th>
+                    <th>מדבקות</th>
+                    <th>מהדקים</th>
+                    <th>גידים</th>
+                    <th>שלטים</th>
+                    <th>הרכבה</th>
+                    <th>AM</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+                                </table>
+                            </div>
+                            <!-- TAB 2: מעקב ייצור -->
+                            <div class="tab-content" id="tab-2">
+                                <table id="production-tracking-table">
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם לקוח</th>
+                        <th>שם פרויקט</th>
+                        <th>שם לוח</th>
+                        <th>עובד</th>
+                        <th>סטטוס</th>
+                        <th>סטטוס מבנה</th>
+                        <th>סטטוס ציוד</th>
+                        <th>סטטוס הרכבה</th>
+                        <th>סטטוס חיווט</th>
+                        <th>סטטוס בדיקה</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+                    </table>
+                </div>
+            <!-- TAB 3: פרויקטים שהסתיימו -->
+            <div class="tab-content" id="tab-3">
+                    <table id="projects-table-done">
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם לקוח</th>
+                        <th>שם פרוייקט</th>
+                        <th>שם לוח</th>
+                        <th>שם עובד</th>
+                        <th>סטטוס</th>
+                        <th>סטטוס שלילי</th>
+                        <th>סטטוס שלילי 2</th>
+                        <th>סטטוס שלילי 3</th>
+                        <th>הערות</th>
+                        <th>טופל</th>
+                        <th>נמסר</th>
+                        <th>הסתיים</th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+                    </table>
+        </div>
+                <!-- Project Dialog -->
+                <dialog id="project-dialog">
+                    <h3 id="dialog-title" style="margin-top:0">הוסף פרויקט</h3>
+                    <form id="project-form" method="dialog">
+                        <label>מס הזמנה
+                            <input type="text" name="orderId" required>
+                        </label>
+                        <label>לקוח
+                            <select id="dialog-client" name="client" required></select>
+                        </label>
+                        <label>שם פרויקט
+                            <input type="text" name="projectName" required>
+                        </label>
+                        <label>שם לוח
+                            <input type="text" name="boardName">
+                        </label>
+                                    <label>כמות לוחות
+                                        <input type="number" name="quantity" id="dialog-quantity" min="1" value="1">
+                                    </label>
+                        <label>עובד
+                            <select id="dialog-worker" name="worker"></select>
+                        </label>
+                        <label>סטטוס
+                            <select id="dialog-status" name="status"></select>
+                        </label>
+                        <label>סטטוס שלילי
+                            <select id="dialog-neg1" name="neg1"></select>
+                        </label>
+                        <label>סטטוס שלילי 2
+                            <select id="dialog-neg2" name="neg2"></select>
+                        </label>
+                        <label>סטטוס שלילי 3
+                            <select id="dialog-neg3" name="neg3"></select>
+                        </label>
+                        <label>הערות
+                            <input type="text" name="notes">
+                        </label>
+                        <menu style="display:flex;gap:12px;justify-content:flex-start;margin:18px 0 0 0;padding:0;">
+                            <button id="dialog-save" value="default" type="submit">הוסף</button>
+                            <button type="button" onclick="closeProjectDialog()">סגור</button>
+                        </menu>
+                    </form>
+                </dialog>
+    </div>
+    <script>
+        // חשיפת רשימות כקבועים גלובליים עבור המודול legacyProjectUI.js
+        window.PROJECT_CLIENTS = ["שמוליק","החץ הבונה","דמה","הבית החכם LOG-IN","מוצרי חשמל רבי","עמי שרותי חשמל","ע.מ.ו. בניה","אל אר פרוייקטים","גצלר ביקסנשפנר","א.מ.רון","פסגות","א.ש.ירושלמי","חשמל הרצל","אלישיר עבודות חשמל","א.ש.עוצמת החשמל","שתית הנדסה בע\"מ","א.מולין בע\"מ", "כמאל עתמנאה","איהב נכאש","הספל רועי","א.א. נידל","רמי עבודות חשמל ותקשורת","עימאד כנעני","הצבי קירור ומזוג אויר","אביב אספקה טכנית","תומר ברוש","שאל ציוד טכני","פזה אחרת","חשמל הברק","א.צום בע\"מ","עשר חשמל בע\"מ","דייב עתמנא","הנדסת ספיקה","גיא משאבות","אל אי קבלנות","מדן סחר","ח.א.מערכות חשמל","ע.י.הנדסת מים","א.דגנים","שלום גרבי","שאל צפון - מערכת מים","ח.ראמא","זאב הורוביץ","אור שי בע\"מ","סופר אלוני","ב.מ.משאבות","טיב אור","אבו חרירי עמד","רפי-ו.שיווק ואספקה","לויק שירותי תאורה","עמוס","עירית תל אביב","נר בקרה","המניע משאבות","אונליק","וינברג אברהם","מוזיאון המדע ירושליים","המניע משאבות בע\"מ","זייד","א.א.תשתיות עפר ","תדהר","איסמעיל","אבנר צדוק פלגים","גרין ליין","סואד נאטור","חשמל מנשה","חיים","חשמל נעמן אדים","ציון חודרה","דוסטרה עבודות חשמל","דניה סיבוס","סליל המנוע","חשמל לכל","גיאו דניה","עמר","מאיר עבודות בנין ןתעשיה","מכון וולקני","חמדן עומר ס.ע.ר חשמל","י.נ. עבודות חשמל נעם יוסף","אלטק","ש.רא.ל בע\"מ","מונטק מערכות בקרה","נטול פדיל","חשמל אבי","ליימן עמית","שמואל מור חיים","ש.גוזמן ובניו","אושרי","א.אנרגית חשמל","חשמל השחר","ס.ר.י ","רמות יודאיקה יבוא יצוא","יוניק מערכות","רשף עבודות חשמל","בן שגיא","אברהם ששון","אוריון","ב.ק.ר פרויקטים בע\"מ","שון רון","ש.א.ם","שרעבי","אבו ליל חשמל","מרכז טכנולוגיות","פדיל","אשר בטיטו ","מחל משאבות","י.ש חשמל בע\"מ","רון שמעון חשמל ותקשורת","חשמל זאב","גני בר","מולכו קארין","א.ש פרויקטים","ויטלי לונגו","השפלת מי תהום LDDWJ","ערן לבני בע\"מ","פסקריו ושות-משאבות מים בע\"מ","שי זיגדון","דודו מערכות ומשאבות מיים","סקופ מתכות - המניע משאבות","יניב קטן","רונטל הנדסה","יוסי לוי חשמל","עדן סרש התקנות (מיכאל התקנות)","ש.אל ציוד טכני בע\"מ","גרינפלד חיים משאבות","אסטל מיזוג אויר","אפקון בקרה","זרם מיים בע\"מ","מאיר שירותי חשמל","גלביט הנדסה בע\"מ","שיכון ובינוי סולל בונה","אלקטרה ME","נאור הנדסת חשמל","אבי מזרחי","א.ל. יזמות","אלי רוסמן","ליסוגורסקי גרגורי","נווה רעיה (א.ז. 2006) בע\"מ","דור מערכות הנעה בע\"מ","בטא הנדסת חשמל","א.ש. חשמל","גרינקו אנרג'י בע\"מ","חן אזולאי שירותי חשמל","א.ל. אראל הנדסת מיזוג אויר בע\"מ","משה א.ס חשמל","מילניום קירור ומיזוג אויר בע\"מ","חליל יוסף בע\"מ","שרון בראון","ח.ל.צ - חשמלאי לעת צרה","כעין החשמל","אקסייט ישראל פרוייקטים בעמ","יניב עמר","אלתן הנדסה אזרחית בעמ","קונטאל אלקטרומכניקה בעמ","שמדר הנדסה ובניין בע\"מ","אריאל גבאי","דודו שירותי חשמל","שהם משאבות ויפעת","חברת הגיחון בע\"מ","קונטל אוטמציה ובקרה בע\"מ","חכימיאן דני - שירותי חשמל","בית חולים הלל יפה","אלדוחה מרקט שיווק מזון","אלקטרה בע\"מ","איי.די.אי. טכנולוגיות בע\"מ IDE","קינג בירינג","אמידן יצוא יבוא","איתן הנדסת מים בע\"מ","שרות הוגן בע\"מ","נירלט צבעים בע\"מ","AMP","שמואל מלמד","מפטגון","אשקריט","דור משאבות","סרגוסטים בע\"מ","נייטיב טק בעמ","יוסיקור בע\"מ","אול אי ווטר בעמ","אנלייט אנרגיה מתחדשת בע\"מ","הקוטב הצפוני פרוייקטים בע\"מ","א.ב תחזוקה ושיפוצים","אסנת חברה לעבודות קבלניות בעמ","א.ל הנדסת חשמל ותאורה","נחושתן ג'ורג' אהרון","צ'יינה","זרעים טכנולוגיות","China rail way tunnel group co. ltd","Bright source"]; 
+        window.PROJECT_WORKERS = ["מוהנד","לידור","ספיר","מתן","איציק","ישראל","אליהו","עידו","סמואל","ליאוניד","ניקולאי","גרישה","ראובן"]; 
+        window.PROJECT_STATUS_OPTIONS = ["הזמנה חדשה","בתכנון","בשרטוט","באישור לקוח","ממתין לשיבוץ","בייצור","בבדיקה","ממתין לאיסוף"]; 
+        window.PROJECT_NEGATIVE_STATUSES = ["חסר ציוד","חסר מבנה","חסר שילוט","כשלים בבדיקה","ממתין ל AM"]; 
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof window.loadProjectsFromStorage === 'function') {
+                try { window.loadProjectsFromStorage(); } catch(e){ console.warn('loadProjectsFromStorage failed', e); }
+            }
+            if (typeof window.showTab === 'function') window.showTab(0);
+        });
+    </script>
+    <script type="module" src="frontend/modules/legacyProjectUI.js"></script>
+</body>
+</html>

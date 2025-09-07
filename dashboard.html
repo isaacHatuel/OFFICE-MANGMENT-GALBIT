@@ -1,0 +1,290 @@
+
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - ניהול משרד</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f8fb; margin: 0; direction: rtl; }
+    .dashboard-container { max-width: 1100px; margin: 0 auto; padding: 12px; }
+    h1 { color: #1976d2; text-align: right; margin-bottom: 10px; font-size: 1.5em; }
+    .dashboard-actions { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .dashboard-actions button { background: #4fc3f7; color: #fff; border: none; border-radius: 7px; padding: 5px 14px; font-size: 0.95em; cursor: pointer; font-weight: 500; transition: background 0.2s; }
+    .dashboard-actions button:hover { background: #039be5; }
+    .stats-cards { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .stat-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; flex: 1 1 110px; padding: 7px 8px; display: flex; align-items: center; gap: 6px; min-width: 90px; }
+    .stat-card .material-icons { font-size: 1.1em; color: #4fc3f7; }
+    .stat-card .stat-value { font-size: 1em; font-weight: bold; color: #1976d2; }
+    .charts-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .chart-box { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; flex: 1 1 200px; padding: 7px; min-width: 160px; }
+    .table-section { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 7px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.92em; }
+    th, td { border: 1px solid #e3f2fd; padding: 3px 4px; text-align: center; }
+    th { background: #e3f2fd; color: #1976d2; font-size: 0.98em; }
+    tr:nth-child(even) { background: #fafdff; }
+    .status-tag { border-radius: 8px; padding: 2px 7px; font-size: 0.9em; color: #fff; display: inline-block; }
+    .status-בתכנון { background: #ffb300; }
+    .status-בשרטוט { background: #29b6f6; }
+    .status-בייצור { background: #43a047; }
+    .status-ממתין { background: #e53935; }
+    .status-הסתיים { background: #388e3c; }
+    .action-btn { border: none; background: none; cursor: pointer; color: #1976d2; font-size: 1em; }
+    .action-btn:hover { color: #e53935; }
+    .dashboard-dialog { direction: rtl; text-align: right; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px #0002; padding: 14px 16px; min-width: 200px; border: none; }
+    .dashboard-dialog label { display: block; margin-bottom: 6px; }
+    .dashboard-dialog input { width: 100%; padding: 4px; margin-top: 2px; border-radius: 5px; border: 1px solid #b3e5fc; }
+    .dashboard-dialog button { margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="dashboard-container">
+    <div class="dashboard-actions">
+        <button onclick="openAddClientDialog()">הוסף לקוח</button>
+        <button onclick="openAddWorkerDialog()">הוסף עובד</button>
+        <button onclick="openAddStatusDialog()">הוסף סטטוס</button>
+    </div>
+    <dialog id="add-client-dialog" class="dashboard-dialog">
+        <form method="dialog" onsubmit="addClient(event)">
+            <label>שם לקוח:<br><input type="text" id="new-client-name" required></label>
+            <button type="submit">הוסף</button>
+            <button type="button" onclick="closeAddClientDialog()">ביטול</button>
+        </form>
+    </dialog>
+    <dialog id="add-worker-dialog" class="dashboard-dialog">
+        <form method="dialog" onsubmit="addWorker(event)">
+            <label>שם עובד:<br><input type="text" id="new-worker-name" required></label>
+            <button type="submit">הוסף</button>
+            <button type="button" onclick="closeAddWorkerDialog()">ביטול</button>
+        </form>
+    </dialog>
+    <dialog id="add-status-dialog" class="dashboard-dialog">
+        <form method="dialog" onsubmit="addStatus(event)">
+            <label>סטטוס חדש:<br><input type="text" id="new-status-name" required></label>
+            <button type="submit">הוסף</button>
+            <button type="button" onclick="closeAddStatusDialog()">ביטול</button>
+        </form>
+    </dialog>
+    <h1>לוח בקרה - ניהול משרד</h1>
+    <div class="dashboard-tabs" style="display:flex;gap:0.5em;margin-bottom:12px;">
+        <button class="tab active" onclick="location.href='dashboard.html'">Dashboard</button>
+        <button class="tab" onclick="location.href='index2.html'">מעקב פרויקטים</button>
+        <button class="tab" onclick="location.href='index2.html#tab-2'">יומן משימות</button>
+        <button class="tab" onclick="location.href='index2.html#tab-3'">מעקב ייצור</button>
+    </div>
+    <div class="table-section">
+        <h2>פרויקטים פעילים</h2>
+        <table id="dashboard-projects-table">
+            <thead>
+                <tr>
+                    <th>תאריך</th>
+                    <th>לקוח</th>
+                    <th>פרויקט</th>
+                    <th>לוח</th>
+                    <th>סטטוס</th>
+                    <th>עובד</th>
+                    <th>התחלה</th>
+                    <th>עדכון אחרון</th>
+                    <th>פעולות</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="table-section">
+        <h2>היסטוריית תנועות</h2>
+        <table id="dashboard-history-table">
+            <thead>
+                <tr>
+                    <th>תאריך</th>
+                    <th>פרויקט</th>
+                    <th>לוח</th>
+                    <th>פעולה</th>
+                    <th>סטטוס</th>
+                    <th>עובד</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="stats-cards">
+        <div class="stat-card"><span class="material-icons">assignment</span>
+            <div>
+                <div class="stat-value" id="stat-total">0</div>
+                <div>סה"כ פרויקטים</div>
+            </div>
+        </div>
+        <div class="stat-card"><span class="material-icons">check_circle</span>
+            <div>
+                <div class="stat-value" id="stat-done">0</div>
+                <div>פרויקטים שהסתיימו</div>
+            </div>
+        </div>
+        <div class="stat-card"><span class="material-icons">timer</span>
+            <div>
+                <div class="stat-value" id="stat-avg-time">--</div>
+                <div>ממוצע זמן לסיום</div>
+            </div>
+        </div>
+        <div class="stat-card"><span class="material-icons">person</span>
+            <div>
+                <div class="stat-value" id="stat-top-worker">--</div>
+                <div>העובד הכי פעיל</div>
+            </div>
+        </div>
+    </div>
+    <div class="charts-row">
+        <div class="chart-box">
+            <canvas id="statusPie"></canvas>
+        </div>
+        <div class="chart-box">
+            <canvas id="workerBar"></canvas>
+        </div>
+    </div>
+</div>
+<script>
+function getClients() {
+    try { return JSON.parse(localStorage.getItem('clients') || '[]'); } catch(e){ return []; }
+}
+function getWorkers() {
+    try { return JSON.parse(localStorage.getItem('workers') || '[]'); } catch(e){ return []; }
+}
+function getStatuses() {
+    try { return JSON.parse(localStorage.getItem('statuses') || '[]'); } catch(e){ return []; }
+}
+function openAddClientDialog() { document.getElementById('add-client-dialog').showModal(); document.getElementById('new-client-name').value=''; }
+function closeAddClientDialog() { document.getElementById('add-client-dialog').close(); }
+function addClient(ev) {
+    ev.preventDefault();
+    let arr = getClients();
+    const name = document.getElementById('new-client-name').value.trim();
+    if (name && !arr.includes(name)) { arr.push(name); localStorage.setItem('clients', JSON.stringify(arr)); }
+    closeAddClientDialog();
+    renderProjectsTable(getProjects().filter(p=>p.type!=='parent'));
+}
+function openAddWorkerDialog() { document.getElementById('add-worker-dialog').showModal(); document.getElementById('new-worker-name').value=''; }
+function closeAddWorkerDialog() { document.getElementById('add-worker-dialog').close(); }
+function addWorker(ev) {
+    ev.preventDefault();
+    let arr = getWorkers();
+    const name = document.getElementById('new-worker-name').value.trim();
+    if (name && !arr.includes(name)) { arr.push(name); localStorage.setItem('workers', JSON.stringify(arr)); }
+    closeAddWorkerDialog();
+    renderProjectsTable(getProjects().filter(p=>p.type!=='parent'));
+}
+function openAddStatusDialog() { document.getElementById('add-status-dialog').showModal(); document.getElementById('new-status-name').value=''; }
+function closeAddStatusDialog() { document.getElementById('add-status-dialog').close(); }
+function addStatus(ev) {
+    ev.preventDefault();
+    let arr = getStatuses();
+    const name = document.getElementById('new-status-name').value.trim();
+    if (name && !arr.includes(name)) { arr.push(name); localStorage.setItem('statuses', JSON.stringify(arr)); }
+    closeAddStatusDialog();
+    renderProjectsTable(getProjects().filter(p=>p.type!=='parent'));
+}
+function getProjects() {
+    try { return JSON.parse(localStorage.getItem('projects') || '[]'); } catch(e){ return []; }
+}
+function getHistory() {
+    try { return JSON.parse(localStorage.getItem('projectHistory') || '[]'); } catch(e){ return []; }
+}
+function updateStats(projects) {
+    document.getElementById('stat-total').textContent = projects.length;
+    document.getElementById('stat-done').textContent = projects.filter(p=>p.finished).length;
+    let times = projects.filter(p=>p.finished && p.startDate && p.endDate).map(p=>(new Date(p.endDate)-new Date(p.startDate))/1000/60/60/24);
+    document.getElementById('stat-avg-time').textContent = times.length ? (times.reduce((a,b)=>a+b,0)/times.length).toFixed(1)+' ימים' : '--';
+    let workers = {};
+    projects.forEach(p=>{ if(p.worker) workers[p.worker]=(workers[p.worker]||0)+1; });
+    let top = Object.entries(workers).sort((a,b)=>b[1]-a[1])[0];
+    document.getElementById('stat-top-worker').textContent = top ? top[0] : '--';
+}
+function renderProjectsTable(projects) {
+    const tbody = document.getElementById('dashboard-projects-table').querySelector('tbody');
+    tbody.innerHTML = '';
+    const clients = getClients();
+    const workers = getWorkers();
+    const statuses = getStatuses();
+    projects.forEach(p=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${p.date||''}</td>
+            <td>
+                <select onchange="updateProjectField('${p.orderId}','client',this.value)">
+                    ${clients.map(c=>`<option${p.client===c?' selected':''}>${c}</option>`).join('')}
+                </select>
+            </td>
+            <td>${p.projectName||''}</td>
+            <td>${p.boardName||''}</td>
+            <td>
+                <select onchange="updateProjectField('${p.orderId}','status',this.value)">
+                    ${statuses.map(s=>`<option${p.status===s?' selected':''}>${s}</option>`).join('')}
+                </select>
+            </td>
+            <td>
+                <select onchange="updateProjectField('${p.orderId}','worker',this.value)">
+                    ${workers.map(w=>`<option${p.worker===w?' selected':''}>${w}</option>`).join('')}
+                </select>
+            </td>
+            <td>${p.startDate||''}</td>
+            <td>${p.endDate||''}</td>
+            <td>
+                <button class="action-btn" title="ערוך"><span class="material-icons">edit</span></button>
+                <button class="action-btn" title="היסטוריה"><span class="material-icons">history</span></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+function updateProjectField(orderId, field, value) {
+    let projects = getProjects();
+    let idx = projects.findIndex(p=>p.orderId===orderId);
+    if(idx>-1) { projects[idx][field]=value; localStorage.setItem('projects',JSON.stringify(projects)); }
+    renderProjectsTable(projects.filter(p=>p.type!=='parent'));
+}
+function renderHistoryTable(history) {
+    const tbody = document.getElementById('dashboard-history-table').querySelector('tbody');
+    tbody.innerHTML = '';
+    history.forEach(h=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${h.date||''}</td>
+            <td>${h.projectName||''}</td>
+            <td>${h.boardName||''}</td>
+            <td>${h.action||''}</td>
+            <td>${h.status||''}</td>
+            <td>${h.worker||''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+function renderCharts(projects) {
+    const statusCounts = {};
+    projects.forEach(p=>{ statusCounts[p.status||'ממתין']=(statusCounts[p.status||'ממתין']||0)+1; });
+    new Chart(document.getElementById('statusPie'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(statusCounts),
+            datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#29b6f6','#ffb300','#43a047','#e53935','#388e3c','#ab47bc','#8d6e63'] }]
+        }
+    });
+    const workerCounts = {};
+    projects.forEach(p=>{ if(p.worker) workerCounts[p.worker]=(workerCounts[p.worker]||0)+1; });
+    new Chart(document.getElementById('workerBar'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(workerCounts),
+            datasets: [{ label: 'מספר לוחות', data: Object.values(workerCounts), backgroundColor: '#4fc3f7' }]
+        }
+    });
+}
+window.addEventListener('DOMContentLoaded', function() {
+    const projects = getProjects().filter(p=>p.type!=='parent');
+    updateStats(projects);
+    renderProjectsTable(projects);
+    renderCharts(projects);
+    renderHistoryTable(getHistory());
+});
+</script>
+</body>
+</html>

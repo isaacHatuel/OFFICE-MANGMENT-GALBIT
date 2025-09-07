@@ -1,0 +1,30 @@
+{
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "extends": ["standard"],
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "args": "none", "ignoreRestSiblings": true }],
+    "no-console": "off",
+  "prefer-const": "warn",
+  "semi": ["off"],
+  "indent": "off",
+  "camelcase": "off",
+  "space-before-function-paren": "off",
+  "arrow-spacing": "off",
+  "comma-spacing": "off",
+  "object-curly-spacing": "off",
+  "space-infix-ops": "off",
+  "keyword-spacing": "off",
+  "one-var": "off",
+  "eol-last": "off",
+  "quotes": "off",
+  "multiline-ternary": "off"
+  },
+  "ignorePatterns": ["node_modules/", "init-scripts/", "migrations/", "**/init.sql"]
+}
