@@ -218,6 +218,9 @@ window.syncJournalTable = function(filterWorker) {
       const pr = document.createElement('tr');
       pr.className='journal-parent';
       pr.dataset.orderId = parent.orderId || '';
+      // journal key for parent (special sentinel for boardName)
+      const parentKey = [parent.date||'', parent.client||'', parent.projectName||'', '__PARENT__'].join('|');
+      pr.dataset.journalKey = parentKey;
       const collapseTd = document.createElement('td');
       collapseTd.style.background='#eef6fb';
       collapseTd.style.fontWeight='600';
@@ -229,8 +232,18 @@ window.syncJournalTable = function(filterWorker) {
   const boardTd=document.createElement('td'); boardTd.style.background='#eef6fb'; pr.appendChild(boardTd);
   // Quantity column = number of child boards (after worker filter)
       const qtyTd=document.createElement('td'); qtyTd.style.background='#eef6fb'; qtyTd.style.fontWeight='600'; qtyTd.textContent = pChildren.length; pr.appendChild(qtyTd);
-  // Remaining 8 task columns placeholders
-  for(let i=0;i<8;i++){ const td=document.createElement('td'); td.style.background='#eef6fb'; pr.appendChild(td); }
+      // Notes column for parent
+      if(!journalData[parentKey]) journalData[parentKey] = journalData[parentKey] || {};
+      const parentNoteVal = (journalData[parentKey] && journalData[parentKey].note) ? journalData[parentKey].note : '';
+      const noteTd = document.createElement('td');
+      noteTd.style.background = '#eef6fb';
+      noteTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;">
+          <span class="note-display" data-has-note="${parentNoteVal?1:0}" style="cursor:${parentNoteVal? 'pointer':'text'};color:${parentNoteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;">${parentNoteVal? 'הערה קיימת!':''}</span>
+          <input type="hidden" class="note-hidden-input" value="${parentNoteVal.replace(/"/g,'&quot;')}">
+        </div>`;
+      pr.appendChild(noteTd);
+      // Remaining 8 task columns placeholders (col7-col13)
+      for(let i=0;i<8;i++){ const td=document.createElement('td'); td.style.background='#eef6fb'; pr.appendChild(td); }
       tbody.appendChild(pr);
       const collapseBtn = pr.querySelector('.journal-collapse');
       collapseBtn.addEventListener('click', () => {
@@ -248,10 +261,19 @@ window.syncJournalTable = function(filterWorker) {
         if (window.assignJournalEntry) window.assignJournalEntry(key, { date:ch.date, client:ch.client, projectName:ch.projectName, boardName:ch.boardName });
         if(!journalData[key]) journalData[key]={};
         const tr=document.createElement('tr'); tr.className='journal-child';
+        tr.dataset.journalKey = key;
         // static columns
   // Child row base columns: date, client, project, board, quantity(=1), notes(blank)
-  const staticVals=[ch.date||'', ch.client||'', ch.projectName||'', ch.boardName||'', 1, ''];
-        staticVals.forEach((val,idx)=>{ const td=document.createElement('td'); td.textContent=val; tr.appendChild(td); });
+        const noteVal = journalData[key].note || '';
+        const staticVals=[ch.date||'', ch.client||'', ch.projectName||'', ch.boardName||'', 1];
+        staticVals.forEach((val)=>{ const td=document.createElement('td'); td.textContent=val; tr.appendChild(td); });
+        // notes cell
+        const notesTd = document.createElement('td');
+        notesTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;">
+            <span class="note-display" data-has-note="${noteVal?1:0}" style="cursor:${noteVal? 'pointer':'text'};color:${noteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;">${noteVal? 'הערה קיימת!':''}</span>
+            <input type="hidden" class="note-hidden-input" value="${noteVal.replace(/"/g,'&quot;')}">
+          </div>`;
+        tr.appendChild(notesTd);
         // columns 7-13 with selects
     for(let col=7; col<=13; col++){
           const td=document.createElement('td');
@@ -296,5 +318,16 @@ window.syncJournalTable = function(filterWorker) {
     });
     // persist any initialization of journalData
     localStorage.setItem('journalTasks', JSON.stringify(journalData));
+
+    // Bind double-click to open note editor for all journal note cells (parent + child)
+    Array.from(tbody.querySelectorAll('.journal-note-cell')).forEach(cell => {
+      const td = cell.closest('td');
+      if(td && !td._journalNoteBound){
+        td.addEventListener('dblclick', () => {
+          if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
+        });
+        td._journalNoteBound = true;
+      }
+    });
   } catch(e){ console.warn('syncJournalTable failed', e); }
 };

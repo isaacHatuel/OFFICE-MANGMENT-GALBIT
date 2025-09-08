@@ -562,7 +562,19 @@ function openInlineNoteEditor(notesTd){
         span.style.cursor = val ? 'pointer' : 'text';
         span.style.color = val ? '#1565c0' : '#333';
       }
+      // Persist for projects table
       try { saveProjectsToStorage(); } catch(_){ }
+      // Persist for journal table if inside it
+      try {
+        const journalRow = notesTd.closest('#tasks-journal-table tr');
+        if (journalRow && journalRow.dataset.journalKey){
+          let journalData={};
+          try { journalData = JSON.parse(localStorage.getItem('journalTasks')||'{}'); } catch(e){ journalData={}; }
+          if(!journalData[journalRow.dataset.journalKey]) journalData[journalRow.dataset.journalKey] = {};
+          journalData[journalRow.dataset.journalKey].note = val;
+          localStorage.setItem('journalTasks', JSON.stringify(journalData));
+        }
+      } catch(e){ console.warn('journal note save failed', e); }
       ov.remove();
     };
     const cancel = () => { ov.remove(); };
