@@ -58,6 +58,25 @@ app.get('/api/health', async (req, res) => {
 	}
 });
 
+// API root index (so GET /api/ won't 404)
+app.get(['/api','/api/'], (req,res) => {
+	res.json({
+		status: 'ok',
+		message: 'API root',
+		endpoints: [
+			'/api/health',
+			'/api/projects',
+			'/api/journal',
+			'/api/workers',
+			'/api/tasks',
+			'/api/time-entries',
+			'/api/reference',
+			'/api/boards',
+			'/api/stats'
+		]
+	});
+});
+
 // 404
 app.use('/api', (req, res, next) => {
 	if (!res.headersSent) return res.status(404).json({ error: 'Not found' });
