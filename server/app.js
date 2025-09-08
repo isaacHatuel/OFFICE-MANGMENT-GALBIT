@@ -44,6 +44,18 @@ app.use(express.static(publicDir, { maxAge: '1h', index: 'index.html', fallthrou
 });
 app.use('/frontend', express.static(path.join(__dirname, '..', 'frontend'), { maxAge: '1h' }));
 
+// Fallback for index2.html when running in dev inside container without direct copy of root files
+app.get(['/','/index2.html'], (req,res,next) => {
+	const candidates = [
+		path.join(__dirname,'..','index2.html'),
+		process.env.STATIC_ALT ? path.join(process.env.STATIC_ALT,'index2.html') : null
+	].filter(Boolean);
+	for (const p of candidates) {
+		if (fs.existsSync(p)) return res.sendFile(p);
+	}
+	return res.status(404).send('index2.html not found');
+});
+
 // Routes
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/journal', require('./routes/journal'));
