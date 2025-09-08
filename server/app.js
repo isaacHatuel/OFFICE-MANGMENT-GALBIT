@@ -105,6 +105,29 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(SERVER_PORT, () => console.log('Server listening on', SERVER_PORT));
 
+// Dev asset sync: copy root-level SPA assets into server/public so Express can serve them without duplication pains
+if (process.env.NODE_ENV !== 'production') {
+	const sourceBase = process.env.STATIC_ALT || path.join(__dirname, '..');
+	const targets = ['index2.html','main.css','main.js'];
+	function syncOnce() {
+		targets.forEach(f => {
+			const src = path.join(sourceBase, f);
+			const dst = path.join(publicDir, f);
+			try {
+				if (fs.existsSync(src)) {
+					const needCopy = !fs.existsSync(dst) || fs.statSync(src).mtimeMs > fs.statSync(dst).mtimeMs;
+					if (needCopy) {
+						fs.copyFileSync(src, dst);
+						console.log('[dev-sync] copied', f);
+					}
+				}
+			} catch (e) { console.warn('[dev-sync] failed', f, e.message); }
+		});
+	}
+	syncOnce();
+	setInterval(syncOnce, 5000).unref();
+}
+
 function gracefulExit(signal) {
 	console.log(`Received ${signal} – shutting down gracefully`);
 	server.close(() => {
