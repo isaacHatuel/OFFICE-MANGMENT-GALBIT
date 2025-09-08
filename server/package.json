@@ -5,9 +5,9 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
+    "start:with-migrations": "node scripts/runMigrations.js && node app.js",
     "dev": "nodemon app.js",
     "migrate": "node scripts/runMigrations.js",
-    "postinstall": "node scripts/runMigrations.js",
     "test": "echo \"No tests yet\"",
     "lint": "eslint . --ext .js"
   },
