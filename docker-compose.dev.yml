@@ -1,0 +1,35 @@
+version: "3.9"
+services:
+  db:
+    # inherit from main compose (no change) - we could override if needed
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  app:
+    command: ["npm","run","dev"]
+    environment:
+      NODE_ENV: development
+      WATCH: "1"
+      DB_HOST: db
+      DB_USER: officeuser
+      DB_PASSWORD: officepass
+      DB_NAME: officedb
+      DB_PORT: 5432
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    # faster restarts on changes
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - .:/usr/share/nginx/html:ro
+    environment:
+      APP_API_BASE: /api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

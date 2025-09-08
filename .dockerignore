@@ -5,6 +5,7 @@ node_modules
 .gitignore
 Dockerfile.frontend
 docker-compose.yml
+docker-compose.dev.yml
 README.md
 *.md
 *.env
@@ -12,4 +13,5 @@ frontend/nginx.conf
 server/init.sql
 server/.env*
 server/.DS_Store
+server/nodemon.json
 *.swp
