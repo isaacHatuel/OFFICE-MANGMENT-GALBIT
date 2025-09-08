@@ -44,16 +44,11 @@ app.use(express.static(publicDir, { maxAge: '1h', index: 'index.html', fallthrou
 });
 app.use('/frontend', express.static(path.join(__dirname, '..', 'frontend'), { maxAge: '1h' }));
 
-// Fallback for index2.html when running in dev inside container without direct copy of root files
-app.get(['/','/index2.html'], (req,res,next) => {
-	const candidates = [
-		path.join(__dirname,'..','index2.html'),
-		process.env.STATIC_ALT ? path.join(process.env.STATIC_ALT,'index2.html') : null
-	].filter(Boolean);
-	for (const p of candidates) {
-		if (fs.existsSync(p)) return res.sendFile(p);
-	}
-	return res.status(404).send('index2.html not found');
+// Root: serve SPA from server/public (index2.html placed there for dev)
+app.get(['/','/index2.html'], (req,res) => {
+	const spa = path.join(publicDir,'index2.html');
+	if (fs.existsSync(spa)) return res.sendFile(spa);
+	return res.status(500).send('index2.html missing in public');
 });
 
 // Routes
