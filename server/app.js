@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 const db = require('./models/db');
 const { SERVER_PORT } = require('./config');
 
@@ -33,8 +34,13 @@ app.use((req, res, next) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir, { maxAge: '1h', index: 'index.html', fallthrough: true }));
 // Whitelist root files (index2.html, main.css, main.js, frontend assets)
+// Serve selected root files ONLY if they actually exist on filesystem (in production might not be needed when nginx handles them)
 ['/index2.html','/main.css','/main.js'].forEach(f => {
-	app.get(f, (req,res) => res.sendFile(path.join(__dirname, '..', f)));
+	const relative = f.replace(/^\//,''); // remove leading slash for path.join
+	const filePath = path.join(__dirname, '..', relative);
+	if (fs.existsSync(filePath)) {
+		app.get(f, (req,res) => res.sendFile(filePath));
+	}
 });
 app.use('/frontend', express.static(path.join(__dirname, '..', 'frontend'), { maxAge: '1h' }));
 
