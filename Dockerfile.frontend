@@ -15,9 +15,7 @@ COPY index.html index2.html main.css main.js dashboard.html /usr/share/nginx/htm
 COPY frontend/modules /usr/share/nginx/html/frontend/modules
 
 # Ensure correct permissions (not strictly necessary but explicit)
-RUN addgroup -g 1010 web && adduser -D -G web -u 1010 web && \
-    chown -R web:web /usr/share/nginx/html
-USER web
+# Keep default root user so nginx can create cache dirs; static files already world-readable
 
 EXPOSE 80
 
