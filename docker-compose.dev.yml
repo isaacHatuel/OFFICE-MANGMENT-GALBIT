@@ -17,9 +17,11 @@ services:
       DB_PASSWORD: officepass
       DB_NAME: officedb
       DB_PORT: 5432
+  STATIC_ALT: /workspace
     volumes:
       - ./server:/app
       - /app/node_modules
+  - .:/workspace:ro
     # faster restarts on changes
     restart: unless-stopped
 
