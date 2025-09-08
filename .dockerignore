@@ -3,13 +3,14 @@ node_modules
 *.log
 .git
 .gitignore
-Dockerfile.frontend
+# Keep Dockerfile.frontend and nginx.conf in context for frontend image build
+#Dockerfile.frontend
+#frontend/nginx.conf
 docker-compose.yml
 docker-compose.dev.yml
 README.md
 *.md
 *.env
-frontend/nginx.conf
 server/init.sql
 server/.env*
 server/.DS_Store
