@@ -320,14 +320,44 @@ window.syncJournalTable = function(filterWorker) {
     localStorage.setItem('journalTasks', JSON.stringify(journalData));
 
     // Bind double-click to open note editor for all journal note cells (parent + child)
-    Array.from(tbody.querySelectorAll('.journal-note-cell')).forEach(cell => {
-      const td = cell.closest('td');
-      if(td && !td._journalNoteBound){
-        td.addEventListener('dblclick', () => {
-          if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
-        });
-        td._journalNoteBound = true;
-      }
-    });
+    function bindJournalNoteCells(){
+      Array.from(tbody.querySelectorAll('.journal-note-cell')).forEach(cell => {
+        const td = cell.closest('td');
+        if(td && !td._journalNoteBound){
+          td.addEventListener('dblclick', (ev) => {
+            try { console.debug('[journal] dblclick note cell', td.dataset.journalKey || td.parentElement?.dataset?.journalKey); } catch(_){}
+            if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
+            else {
+              // retry shortly if function not yet on window
+              setTimeout(()=>{ if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td); }, 250);
+            }
+          });
+          // also bind directly on inner span to be safe
+          const span = td.querySelector('.note-display');
+          if(span && !span._noteSpanBound){
+            span.addEventListener('dblclick', (ev) => {
+              ev.stopPropagation();
+              if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
+            });
+            span._noteSpanBound = true;
+          }
+          td._journalNoteBound = true;
+        }
+      });
+    }
+    bindJournalNoteCells();
+    // Delegation fallback (in case future rows injected without full rebuild)
+    if(!tbody._journalNoteDelegated){
+      tbody.addEventListener('dblclick', (e)=>{
+        const wrapper = e.target.closest && e.target.closest('.journal-note-cell');
+        if(wrapper){
+          const td = wrapper.closest('td');
+            if(td){
+              if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
+            }
+        }
+      });
+      tbody._journalNoteDelegated = true;
+    }
   } catch(e){ console.warn('syncJournalTable failed', e); }
 };
