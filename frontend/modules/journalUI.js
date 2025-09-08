@@ -237,8 +237,9 @@ window.syncJournalTable = function(filterWorker) {
       const parentNoteVal = (journalData[parentKey] && journalData[parentKey].note) ? journalData[parentKey].note : '';
       const noteTd = document.createElement('td');
       noteTd.style.background = '#eef6fb';
-      noteTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;">
-          <span class="note-display" data-has-note="${parentNoteVal?1:0}" style="cursor:${parentNoteVal? 'pointer':'text'};color:${parentNoteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;">${parentNoteVal? 'הערה קיימת!':''}</span>
+      noteTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;display:flex;align-items:center;gap:4px;">
+          <span class="note-display" data-has-note="${parentNoteVal?1:0}" style="flex:1;min-width:0;cursor:${parentNoteVal? 'pointer':'text'};color:${parentNoteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parentNoteVal? 'הערה קיימת!':''}</span>
+          <button type="button" class="journal-note-edit-btn" aria-label="עריכת הערה" title="עריכת הערה" style="border:1px solid #90caf9;background:#fff;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75em;line-height:1;">✎</button>
           <input type="hidden" class="note-hidden-input" value="${parentNoteVal.replace(/"/g,'&quot;')}">
         </div>`;
       pr.appendChild(noteTd);
@@ -269,8 +270,9 @@ window.syncJournalTable = function(filterWorker) {
         staticVals.forEach((val)=>{ const td=document.createElement('td'); td.textContent=val; tr.appendChild(td); });
         // notes cell
         const notesTd = document.createElement('td');
-        notesTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;">
-            <span class="note-display" data-has-note="${noteVal?1:0}" style="cursor:${noteVal? 'pointer':'text'};color:${noteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;">${noteVal? 'הערה קיימת!':''}</span>
+        notesTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;display:flex;align-items:center;gap:4px;">
+            <span class="note-display" data-has-note="${noteVal?1:0}" style="flex:1;min-width:0;cursor:${noteVal? 'pointer':'text'};color:${noteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${noteVal? 'הערה קיימת!':''}</span>
+            <button type="button" class="journal-note-edit-btn" aria-label="עריכת הערה" title="עריכת הערה" style="border:1px solid #90caf9;background:#fff;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75em;line-height:1;">✎</button>
             <input type="hidden" class="note-hidden-input" value="${noteVal.replace(/"/g,'&quot;')}">
           </div>`;
         tr.appendChild(notesTd);
@@ -323,25 +325,39 @@ window.syncJournalTable = function(filterWorker) {
     function bindJournalNoteCells(){
       Array.from(tbody.querySelectorAll('.journal-note-cell')).forEach(cell => {
         const td = cell.closest('td');
-        if(td && !td._journalNoteBound){
-          td.addEventListener('dblclick', (ev) => {
-            try { console.debug('[journal] dblclick note cell', td.dataset.journalKey || td.parentElement?.dataset?.journalKey); } catch(_){}
-            if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
-            else {
-              // retry shortly if function not yet on window
-              setTimeout(()=>{ if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td); }, 250);
-            }
-          });
-          // also bind directly on inner span to be safe
-          const span = td.querySelector('.note-display');
-          if(span && !span._noteSpanBound){
-            span.addEventListener('dblclick', (ev) => {
-              ev.stopPropagation();
-              if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
-            });
-            span._noteSpanBound = true;
+        if(!td) return;
+        const span = td.querySelector('.note-display');
+        const editBtn = td.querySelector('.journal-note-edit-btn');
+        const openEditor = () => {
+          if (typeof window.openInlineNoteEditor === 'function') {
+            window.openInlineNoteEditor(td);
+          } else {
+            let attempts=0;
+            const poll = () => {
+              if (typeof window.openInlineNoteEditor === 'function') return window.openInlineNoteEditor(td);
+              if (++attempts < 10) setTimeout(poll,100);
+            };
+            poll();
           }
-          td._journalNoteBound = true;
+        };
+        if(!td._journalNoteDbl){
+          td.addEventListener('dblclick', e => { e.stopPropagation(); openEditor(); });
+          td._journalNoteDbl = true;
+        }
+        // Single click when empty (no existing note) for faster entry
+        if(!td._journalNoteSingle){
+          td.addEventListener('click', e => {
+            if(span && !span.textContent.trim()) openEditor();
+          });
+          td._journalNoteSingle = true;
+        }
+        if(editBtn && !editBtn._journalNoteEdit){
+          editBtn.addEventListener('click', e => { e.stopPropagation(); openEditor(); });
+          editBtn._journalNoteEdit = true;
+        }
+        if(span && !span._journalNoteSpan){
+          span.addEventListener('dblclick', e => { e.stopPropagation(); openEditor(); });
+          span._journalNoteSpan = true;
         }
       });
     }
