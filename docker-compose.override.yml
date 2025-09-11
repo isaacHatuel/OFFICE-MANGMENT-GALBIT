@@ -1,0 +1,30 @@
+version: "3.9"
+# קובץ override לפיתוח: נטען אוטומטית ע"י docker compose יחד עם docker-compose.yml
+# מטרות:
+# 1. לא לבנות frontend על כל שינוי – להשתמש ב-bind mount לקבצים המקומיים.
+# 2. להריץ את השרת (app) ב-nodemon עם קוד חי.
+# 3. לנטרל cache סטטי ולוודא טעינה מיידית של index2.html והמודולים.
+services:
+  app:
+    environment:
+      # Keep production dependencies (nodemon not installed) but still allow live code via bind mount
+      NODE_ENV: production
+    # Run normal start (node app.js) instead of dev (nodemon) because devDependencies omitted in image
+    command: ["npm","run","start"]
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+  frontend:
+    # נחליף את ה-image הבנוי ב-nginx בסיסי עם bind mount לכל הפרויקט.
+    image: nginx:alpine
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - .:/usr/share/nginx/html:ro
+    environment:
+      APP_API_BASE: /api
+    # ודא שהוא תלוי ב-app כדי שה-proxy יעבוד מיד
+    depends_on:
+      - app
+
+# הערה: אין שינוי ל-db ול-backup – הם נשארים כפי שהם בקובץ הראשי.

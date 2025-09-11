@@ -4,10 +4,36 @@
 	<link rel="stylesheet" href="/main.css">
 	<meta charset="UTF-8">
 	<title>ניהול משרד גלביט הנדסה</title>
-	<script type="module" src="/frontend/modules/projectTable.js"></script>
+	<!-- One-time purge of legacy localStorage clients list -->
+	<script>
+	(function(){
+	  try {
+	    if(!localStorage.getItem('__clients_purged_v1')) {
+	      localStorage.removeItem('clients');
+	      localStorage.setItem('__clients_purged_v1','1');
+	      console.log('[purge] removed legacy clients list from localStorage');
+	    }
+	  } catch(e) { }
+	})();
+	</script>
+	<!-- BUILD_MARKER: journal_board_notes_removed v2 (2025-09-10T15:00Z) -->
+	<!-- Live reload (dev only) -->
+	<script>
+	(function(){
+	  if(location.hostname==='localhost' || location.hostname==='127.0.0.1'){
+	    try {
+	      const es = new EventSource('/__livereload');
+	      es.addEventListener('reload', ()=>{ console.log('[live-reload] change detected -> reload'); location.reload(); });
+	    } catch(e){ console.warn('live-reload init failed', e); }
+	  }
+	})();
+	</script>
+	<script type="module" src="/frontend/modules/saveIndicator.js?v=1"></script>
+	<script type="module" src="/frontend/modules/projectTable.js?v=2"></script>
 	<script type="module" src="/frontend/modules/unsynced.js"></script>
 	<script type="module" src="/frontend/modules/productionTracking.js"></script>
-	<script type="module" src="/frontend/modules/journalUI.js"></script>
+	<!-- Keep cache-bust in sync with root index2.html -->
+	<script type="module" src="/frontend/modules/journalUI.js?v=8"></script>
 </head>
 <body>
 	<div id="app">Loading...</div>

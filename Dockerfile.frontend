@@ -1,6 +1,12 @@
 ## Multi-stage not required (no build tooling); simple static delivery
 FROM nginx:alpine
 
+ARG BUILD_VERSION=dev
+ARG BUILD_TIME=unknown
+LABEL build.version="${BUILD_VERSION}" \
+      build.time="${BUILD_TIME}" \
+      build.description="Static frontend for office manager"
+
 LABEL maintainer="isaac" \
       app.part="frontend" \
       description="Static frontend (index2.html) for OFFICE-MANGMENT-GALBIT"
@@ -8,11 +14,18 @@ LABEL maintainer="isaac" \
 # Copy nginx config (relative to build context root)
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy static root assets
-COPY index.html index2.html main.css main.js dashboard.html /usr/share/nginx/html/
+# Copy static root assets (index.html removed in repo; generate lightweight redirect)
+COPY index2.html main.css main.js dashboard.html /usr/share/nginx/html/
+RUN printf '%s\n' '<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0; url=/index2.html"/><title>Redirect</title></head><body>Redirecting...</body></html>' > /usr/share/nginx/html/index.html
+# Also copy modular main logic (frontend/main.js) so index2.html can import it explicitly
+COPY frontend/main.js /usr/share/nginx/html/frontend/main.js
+COPY frontend/api.js /usr/share/nginx/html/frontend/api.js
 
 # Copy JS modules and any nested assets
 COPY frontend/modules /usr/share/nginx/html/frontend/modules
+
+# Simple provenance stamp (can be viewed via 'docker inspect')
+RUN echo "Build version: ${BUILD_VERSION} at ${BUILD_TIME}" > /usr/share/nginx/html/__build.txt
 
 # Ensure correct permissions (not strictly necessary but explicit)
 # Keep default root user so nginx can create cache dirs; static files already world-readable

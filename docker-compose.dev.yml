@@ -1,13 +1,11 @@
 version: "3.9"
 services:
   db:
-    # inherit from main compose (no change) - we could override if needed
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   app:
-    # Install (including dev) every container start then run nodemon
     command: ["sh","-c","npm install && npm run dev"]
     environment:
       NODE_ENV: development
@@ -17,12 +15,9 @@ services:
       DB_PASSWORD: officepass
       DB_NAME: officedb
       DB_PORT: 5432
-  STATIC_ALT: /workspace
     volumes:
       - ./server:/app
       - /app/node_modules
-  - .:/workspace:ro
-    # faster restarts on changes
     restart: unless-stopped
 
   frontend:

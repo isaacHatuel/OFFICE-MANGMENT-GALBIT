@@ -4,10 +4,37 @@
     <link rel="stylesheet" href="main.css">
     <meta charset="UTF-8">
     <title>ניהול משרד גלביט הנדסה</title>
-    <script type="module" src="frontend/modules/projectTable.js"></script>
+        <!-- One-time purge of legacy localStorage clients list -->
+        <script>
+            (function(){
+                try {
+                    if(!localStorage.getItem('__clients_purged_v1')) {
+                        localStorage.removeItem('clients');
+                        localStorage.setItem('__clients_purged_v1','1');
+                        console.log('[purge] removed legacy clients list from localStorage');
+                    }
+                } catch(e) { /* ignore */ }
+            })();
+        </script>
+    <script type="module" src="frontend/modules/saveIndicator.js?v=1"></script>
+    <script type="module" src="frontend/modules/disableLocalStorage.js?v=1"></script>
+    <script type="module" src="frontend/modules/projectTable.js?v=2"></script>
     <script type="module" src="frontend/modules/unsynced.js"></script>
     <script type="module" src="frontend/modules/productionTracking.js"></script>
-    <script type="module" src="frontend/modules/journalUI.js"></script>
+    <!-- Added version query to bust browser cache for journalUI.js -->
+    <script type="module" src="frontend/modules/journalUI.js?v=8"></script>
+    <!-- BUILD_MARKER: journal_board_notes_removed v2 (2025-09-10T15:00Z) -->
+    <!-- Live reload (dev only - safe no-op in prod if endpoint missing) -->
+    <script>
+        (function(){
+            if(location.hostname==='localhost' || location.hostname==='127.0.0.1'){
+                try {
+                    const es = new EventSource('/__livereload');
+                    es.addEventListener('reload', ()=>{ console.log('[live-reload] change detected -> reload'); location.reload(); });
+                } catch(e){ console.warn('live-reload init failed', e); }
+            }
+        })();
+    </script>
     <style>
         :root {
             --main-bg: #eaf6fb;
@@ -126,23 +153,7 @@
         }
     tr.child-row td { padding: 2px 4px; font-size: 0.92em; line-height:1.05; }
     tr.parent-row td { background:#f5faff; font-weight:500; }
-        /* עיצוב תא הערות ללוח ביומן משימות מחלקתי */
-        #tasks-journal-table td.journal-notes-cell {
-            max-width: 140px;
-            min-width: 80px;
-            width: 120px;
-            max-height: 38px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            vertical-align: middle;
-            word-break: break-all;
-            transition: border 0.2s, border-radius 0.2s;
-        }
-        #tasks-journal-table td.journal-notes-cell.has-notes {
-            border: 2px solid red !important;
-            border-radius: 8px !important;
-        }
+    /* Board notes column & styles removed (see BUILD_MARKER) */
         th {
             background: var(--primary-light);
             color: var(--primary-dark);
@@ -255,9 +266,14 @@
 </head>
 <body>
     <!-- LEGACY_FORM הוסר: הטופס מנוהל במודולים -->
-    <script type="module" src="frontend/main.js"></script>
+    <script type="module" src="frontend/main.js?v=2"></script>
     <div class="container">
         <h1>ניהול משרד גלביט הנדסה</h1>
+        <div style="position:fixed;top:10px;right:14px;z-index:9999;display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="clients-admin-btn" style="background:#455a64;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;box-shadow:0 2px 8px #0002;">רשימת לקוחות</button>
+            <button id="workers-admin-btn" style="background:#546e7a;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;box-shadow:0 2px 8px #0002;">רשימת עובדים</button>
+        </div>
+    <!-- Live test button removed per request -->
                 <div class="tabs">
                         <button class="tab active" onclick="showTab(0)">מעקב פרויקטים</button>
                         <button class="tab" onclick="showTab(1)">יומן משימות</button>
@@ -309,6 +325,7 @@
                     <th>שם פרויקט</th>
                     <th>שם לוח</th>
                     <th>כמות</th>
+                    <th>מספר עבודה /תכנית</th>
                     <th>הערות ללוח</th>
                     <th>שרטוט</th>
                     <th>מדבקות</th>
@@ -330,7 +347,6 @@
                         <th>תאריך</th>
                         <th>שם לקוח</th>
                         <th>שם פרויקט</th>
-                        <th>שם לוח</th>
                         <th>עובד</th>
                         <th>סטטוס</th>
                         <th>סטטוס מבנה</th>
@@ -351,7 +367,6 @@
                         <th>תאריך</th>
                         <th>שם לקוח</th>
                         <th>שם פרוייקט</th>
-                        <th>שם לוח</th>
                         <th>שם עובד</th>
                         <th>סטטוס</th>
                         <th>סטטוס שלילי</th>
@@ -412,18 +427,219 @@
                 </dialog>
     </div>
     <script>
-        // חשיפת רשימות כקבועים גלובליים עבור המודול legacyProjectUI.js
-        window.PROJECT_CLIENTS = ["שמוליק","החץ הבונה","דמה","הבית החכם LOG-IN","מוצרי חשמל רבי","עמי שרותי חשמל","ע.מ.ו. בניה","אל אר פרוייקטים","גצלר ביקסנשפנר","א.מ.רון","פסגות","א.ש.ירושלמי","חשמל הרצל","אלישיר עבודות חשמל","א.ש.עוצמת החשמל","שתית הנדסה בע\"מ","א.מולין בע\"מ", "כמאל עתמנאה","איהב נכאש","הספל רועי","א.א. נידל","רמי עבודות חשמל ותקשורת","עימאד כנעני","הצבי קירור ומזוג אויר","אביב אספקה טכנית","תומר ברוש","שאל ציוד טכני","פזה אחרת","חשמל הברק","א.צום בע\"מ","עשר חשמל בע\"מ","דייב עתמנא","הנדסת ספיקה","גיא משאבות","אל אי קבלנות","מדן סחר","ח.א.מערכות חשמל","ע.י.הנדסת מים","א.דגנים","שלום גרבי","שאל צפון - מערכת מים","ח.ראמא","זאב הורוביץ","אור שי בע\"מ","סופר אלוני","ב.מ.משאבות","טיב אור","אבו חרירי עמד","רפי-ו.שיווק ואספקה","לויק שירותי תאורה","עמוס","עירית תל אביב","נר בקרה","המניע משאבות","אונליק","וינברג אברהם","מוזיאון המדע ירושליים","המניע משאבות בע\"מ","זייד","א.א.תשתיות עפר ","תדהר","איסמעיל","אבנר צדוק פלגים","גרין ליין","סואד נאטור","חשמל מנשה","חיים","חשמל נעמן אדים","ציון חודרה","דוסטרה עבודות חשמל","דניה סיבוס","סליל המנוע","חשמל לכל","גיאו דניה","עמר","מאיר עבודות בנין ןתעשיה","מכון וולקני","חמדן עומר ס.ע.ר חשמל","י.נ. עבודות חשמל נעם יוסף","אלטק","ש.רא.ל בע\"מ","מונטק מערכות בקרה","נטול פדיל","חשמל אבי","ליימן עמית","שמואל מור חיים","ש.גוזמן ובניו","אושרי","א.אנרגית חשמל","חשמל השחר","ס.ר.י ","רמות יודאיקה יבוא יצוא","יוניק מערכות","רשף עבודות חשמל","בן שגיא","אברהם ששון","אוריון","ב.ק.ר פרויקטים בע\"מ","שון רון","ש.א.ם","שרעבי","אבו ליל חשמל","מרכז טכנולוגיות","פדיל","אשר בטיטו ","מחל משאבות","י.ש חשמל בע\"מ","רון שמעון חשמל ותקשורת","חשמל זאב","גני בר","מולכו קארין","א.ש פרויקטים","ויטלי לונגו","השפלת מי תהום LDDWJ","ערן לבני בע\"מ","פסקריו ושות-משאבות מים בע\"מ","שי זיגדון","דודו מערכות ומשאבות מיים","סקופ מתכות - המניע משאבות","יניב קטן","רונטל הנדסה","יוסי לוי חשמל","עדן סרש התקנות (מיכאל התקנות)","ש.אל ציוד טכני בע\"מ","גרינפלד חיים משאבות","אסטל מיזוג אויר","אפקון בקרה","זרם מיים בע\"מ","מאיר שירותי חשמל","גלביט הנדסה בע\"מ","שיכון ובינוי סולל בונה","אלקטרה ME","נאור הנדסת חשמל","אבי מזרחי","א.ל. יזמות","אלי רוסמן","ליסוגורסקי גרגורי","נווה רעיה (א.ז. 2006) בע\"מ","דור מערכות הנעה בע\"מ","בטא הנדסת חשמל","א.ש. חשמל","גרינקו אנרג'י בע\"מ","חן אזולאי שירותי חשמל","א.ל. אראל הנדסת מיזוג אויר בע\"מ","משה א.ס חשמל","מילניום קירור ומיזוג אויר בע\"מ","חליל יוסף בע\"מ","שרון בראון","ח.ל.צ - חשמלאי לעת צרה","כעין החשמל","אקסייט ישראל פרוייקטים בעמ","יניב עמר","אלתן הנדסה אזרחית בעמ","קונטאל אלקטרומכניקה בעמ","שמדר הנדסה ובניין בע\"מ","אריאל גבאי","דודו שירותי חשמל","שהם משאבות ויפעת","חברת הגיחון בע\"מ","קונטל אוטמציה ובקרה בע\"מ","חכימיאן דני - שירותי חשמל","בית חולים הלל יפה","אלדוחה מרקט שיווק מזון","אלקטרה בע\"מ","איי.די.אי. טכנולוגיות בע\"מ IDE","קינג בירינג","אמידן יצוא יבוא","איתן הנדסת מים בע\"מ","שרות הוגן בע\"מ","נירלט צבעים בע\"מ","AMP","שמואל מלמד","מפטגון","אשקריט","דור משאבות","סרגוסטים בע\"מ","נייטיב טק בעמ","יוסיקור בע\"מ","אול אי ווטר בעמ","אנלייט אנרגיה מתחדשת בע\"מ","הקוטב הצפוני פרוייקטים בע\"מ","א.ב תחזוקה ושיפוצים","אסנת חברה לעבודות קבלניות בעמ","א.ל הנדסת חשמל ותאורה","נחושתן ג'ורג' אהרון","צ'יינה","זרעים טכנולוגיות","China rail way tunnel group co. ltd","Bright source"]; 
-        window.PROJECT_WORKERS = ["מוהנד","לידור","ספיר","מתן","איציק","ישראל","אליהו","עידו","סמואל","ליאוניד","ניקולאי","גרישה","ראובן"]; 
-        window.PROJECT_STATUS_OPTIONS = ["הזמנה חדשה","בתכנון","בשרטוט","באישור לקוח","ממתין לשיבוץ","בייצור","בבדיקה","ממתין לאיסוף"]; 
-        window.PROJECT_NEGATIVE_STATUSES = ["חסר ציוד","חסר מבנה","חסר שילוט","כשלים בבדיקה","ממתין ל AM"]; 
+        // רשימת לקוחות סטטית הוסרה – כעת נטען רק מהשרת (Docker API) דרך main.js loadReference()
+        // השארת מערכי ברירת מחדל ריקים עד להגעת הנתונים מהשרת.
+        window.PROJECT_CLIENTS = [];
+        // השארת עובדים/סטטוסים רק כ-fallback רפוי. ניתן להסיר גם אותם בעתיד אם תרצה.
+    // רשימת עובדים סטטית הוסרה – כעת נטען רק מהשרת (backend reference). משאירים ריק עד שהנתונים יגיעו.
+    window.PROJECT_WORKERS = [];
+        window.PROJECT_STATUS_OPTIONS = window.PROJECT_STATUS_OPTIONS || ["הזמנה חדשה","בתכנון","בשרטוט","באישור לקוח","ממתין לשיבוץ","בייצור","בבדיקה","ממתין לאיסוף"]; 
+        window.PROJECT_NEGATIVE_STATUSES = window.PROJECT_NEGATIVE_STATUSES || ["חסר ציוד","חסר מבנה","חסר שילוט","כשלים בבדיקה","ממתין ל AM"]; 
         document.addEventListener('DOMContentLoaded', () => {
+            // טעינת פרויקטים מקומית (אם קיימת) – עדיין מופעלת רק אם הפונקציה קיימת
             if (typeof window.loadProjectsFromStorage === 'function') {
                 try { window.loadProjectsFromStorage(); } catch(e){ console.warn('loadProjectsFromStorage failed', e); }
             }
-            if (typeof window.showTab === 'function') window.showTab(0);
+            // Removed forced showTab(0) to allow legacyProjectUI.js restore logic (__main_activeTab)
+            if (typeof window.showTab === 'function') {
+                try {
+                    const saved = parseInt(localStorage.getItem('__main_activeTab')||'0',10);
+                    window.showTab(isNaN(saved)?0:saved);
+                } catch(_) { window.showTab(0); }
+            }
         });
     </script>
-    <script type="module" src="frontend/modules/legacyProjectUI.js"></script>
+    <script type="module" src="frontend/modules/legacyProjectUI.js?v=2"></script>
+    <dialog id="clients-admin-dialog" style="min-width:460px">
+        <h3 style="margin-top:0">ניהול לקוחות</h3>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <input id="new-client-name" type="text" placeholder="שם לקוח חדש" style="flex:1;padding:6px" />
+            <button id="add-client-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;">הוסף</button>
+        </div>
+        <div style="max-height:320px;overflow:auto;border:1px solid #ccc;padding:6px;border-radius:6px;" id="clients-list-box">
+            <div style="text-align:center;color:#888;font-size:.9em">טוען...</div>
+        </div>
+        <menu style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;padding:0;">
+            <button id="export-clients-btn" type="button">ייצוא לקובץ</button>
+            <button id="close-clients-btn" type="button">סגור</button>
+        </menu>
+        <p id="clients-admin-msg" style="font-size:.8em;color:#666;margin:6px 0 0 0;"></p>
+    </dialog>
+    <dialog id="workers-admin-dialog" style="min-width:460px">
+        <h3 style="margin-top:0">ניהול עובדים</h3>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <input id="new-worker-name" type="text" placeholder="שם עובד חדש" style="flex:1;padding:6px" />
+            <button id="add-worker-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;">הוסף</button>
+        </div>
+        <div style="max-height:320px;overflow:auto;border:1px solid #ccc;padding:6px;border-radius:6px;" id="workers-list-box">
+            <div style="text-align:center;color:#888;font-size:.9em">טוען...</div>
+        </div>
+        <menu style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;padding:0;">
+            <button id="export-workers-btn" type="button">ייצוא לקובץ</button>
+            <button id="close-workers-btn" type="button">סגור</button>
+        </menu>
+        <p id="workers-admin-msg" style="font-size:.8em;color:#666;margin:6px 0 0 0;"></p>
+    </dialog>
+    <script>
+    (function(){
+        const dlg = document.getElementById('clients-admin-dialog');
+        const btn = document.getElementById('clients-admin-btn');
+        const listBox = document.getElementById('clients-list-box');
+        const addBtn = document.getElementById('add-client-btn');
+        const newInput = document.getElementById('new-client-name');
+        const closeBtn = document.getElementById('close-clients-btn');
+        const exportBtn = document.getElementById('export-clients-btn');
+        const msg = document.getElementById('clients-admin-msg');
+        // --- Admin token handling (no hardcoded secret) ---
+        function getToken(){ return sessionStorage.getItem('__admin_token') || ''; }
+        function setToken(t){ if(t) sessionStorage.setItem('__admin_token', t); }
+        async function ensureToken(){
+            let tk = getToken();
+            if(!tk){
+                tk = prompt('הזן אסימון מנהל (ADMIN_TOKEN)');
+                if(tk) setToken(tk);
+            }
+            return tk;
+        }
+        // Show button only if backend exposed admin flag OR user already entered token.
+    function maybeShowButton(){ btn.style.display='inline-block'; }
+        maybeShowButton();
+    // Attempt to load admin flag (two paths); purely informational now
+    ['\/admin-flag.js','\/api\/admin-flag.js'].forEach(src=>{ const s=document.createElement('script'); s.src=src; s.onload=()=>console.debug('[admin-flag] loaded',src); s.onerror=()=>console.debug('[admin-flag] failed',src); document.head.appendChild(s); });
+
+        function note(t,c){ msg.textContent=t; msg.style.color=c||'#666'; }
+        async function fetchClients(){
+            listBox.innerHTML = '<div style="text-align:center;color:#888;font-size:.9em">טוען...</div>';
+            try {
+                const r = await fetch('/api/clients');
+                if(!r.ok) throw new Error(r.status);
+                const data = await r.json();
+                const arr = (data.clients||[]).slice();
+                listBox.innerHTML = arr.map(c=>`<div data-name="${c.name.replace(/"/g,'&quot;')}" data-id="${c.id||''}" style="display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid #eee;">`+
+                    `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;direction:rtl">${c.name}</span>`+
+                    `<button class="del-client" data-id="${c.id||''}" data-name="${c.name}" style="background:#d32f2f;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:.75em;">מחק</button>`+
+                `</div>`).join('');
+            } catch(e){ listBox.innerHTML = '<div style="color:#d32f2f;text-align:center">שגיאה בטעינה</div>'; }
+        }
+        async function addClient(){
+            const name = newInput.value.trim();
+            if(!name){ note('חובה להזין שם', '#d32f2f'); return; }
+            note('שומר...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון', '#d32f2f'); return; }
+                const r = await fetch('/api/clients',{method:'POST', headers:{'Content-Type':'application/json','x-admin-token':token}, body: JSON.stringify({ name })});
+                if(!r.ok) throw new Error(r.status);
+                newInput.value=''; await fetchClients(); note('נוסף', '#2e7d32');
+                document.dispatchEvent(new Event('refdata:refresh-requested'));
+            } catch(e){
+                if(e.message==='403') { sessionStorage.removeItem('__admin_token'); note('אסימון שגוי', '#d32f2f'); }
+                else note('נכשל בהוספה', '#d32f2f');
+            }
+        }
+        async function delClient(el){
+            const name = el.dataset.name; const id = el.dataset.id;
+            if(!confirm('למחוק לקוח? '+name)) return;
+            note('מוחק...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון', '#d32f2f'); return; }
+                const r = await fetch('/api/clients/'+ encodeURIComponent(id||name), { method:'DELETE', headers:{'x-admin-token':token}});
+                if(!r.ok) throw new Error(r.status);
+                await fetchClients(); note('נמחק', '#2e7d32');
+                document.dispatchEvent(new Event('refdata:refresh-requested'));
+            } catch(e){
+                if(e.message==='403') { sessionStorage.removeItem('__admin_token'); note('אסימון שגוי', '#d32f2f'); }
+                else note('מחיקה נכשלה', '#d32f2f');
+            }
+        }
+        async function exportSnapshot(){
+            note('מייצא...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון', '#d32f2f'); return; }
+                const r = await fetch('/api/clients/export',{method:'POST', headers:{'x-admin-token':token}});
+                if(!r.ok) throw new Error(r.status);
+                note('נשמר לקובץ (clients.json)', '#2e7d32');
+            } catch(e){
+                if(e.message==='403') { sessionStorage.removeItem('__admin_token'); note('אסימון שגוי', '#d32f2f'); }
+                else note('ייצוא נכשל', '#d32f2f');
+            }
+        }
+        btn?.addEventListener('click', ()=>{ dlg.showModal(); fetchClients(); });
+        addBtn?.addEventListener('click', addClient);
+        newInput?.addEventListener('keydown', e=>{ if(e.key==='Enter') addClient(); });
+        closeBtn?.addEventListener('click', ()=> dlg.close());
+        exportBtn?.addEventListener('click', exportSnapshot);
+        listBox?.addEventListener('click', e=>{ const b = e.target.closest('.del-client'); if(b) delClient(b); });
+        // Optional external refresh trigger
+        document.addEventListener('refdata:refresh-requested', async ()=>{
+            try { const ref = await window.apiLayer?.loadReference?.(); if(ref?.clients){ window.clients = ref.clients.map(c=>c.name); } } catch(_){ }
+        });
+    })();
+    (function(){
+        const dlg = document.getElementById('workers-admin-dialog');
+        const btn = document.getElementById('workers-admin-btn');
+        const listBox = document.getElementById('workers-list-box');
+        const addBtn = document.getElementById('add-worker-btn');
+        const newInput = document.getElementById('new-worker-name');
+        const closeBtn = document.getElementById('close-workers-btn');
+        const exportBtn = document.getElementById('export-workers-btn');
+        const msg = document.getElementById('workers-admin-msg');
+        function getToken(){ return sessionStorage.getItem('__admin_token') || ''; }
+        function setToken(t){ if(t) sessionStorage.setItem('__admin_token', t); }
+        async function ensureToken(){ let tk=getToken(); if(!tk){ tk=prompt('הזן אסימון מנהל (ADMIN_TOKEN)'); if(tk) setToken(tk);} return tk; }
+        function note(t,c){ msg.textContent=t; msg.style.color=c||'#666'; }
+        async function fetchWorkers(){
+            listBox.innerHTML='<div style="text-align:center;color:#888;font-size:.9em">טוען...</div>';
+            try {
+                const r = await fetch('/api/worker-names'); if(!r.ok) throw new Error(r.status);
+                const data = await r.json();
+                const arr = (data.workers||[]).slice();
+                listBox.innerHTML = arr.map(w=>`<div data-name="${w.name.replace(/"/g,'&quot;')}" data-id="${w.id||''}" style="display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid #eee;">`+
+                    `<span style=\"flex:1;overflow:hidden;text-overflow:ellipsis;direction:rtl\">${w.name}</span>`+
+                    `<button class=\"del-worker\" data-id=\"${w.id||''}\" data-name=\"${w.name}\" style=\"background:#d32f2f;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:.75em;\">מחק</button>`+
+                `</div>`).join('');
+            } catch(e){ listBox.innerHTML='<div style="color:#d32f2f;text-align:center">שגיאה בטעינה</div>'; }
+        }
+        async function addWorker(){
+            const name = newInput.value.trim(); if(!name){ note('חובה להזין שם','#d32f2f'); return; }
+            note('שומר...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון','#d32f2f'); return; }
+                const r = await fetch('/api/worker-names',{method:'POST', headers:{'Content-Type':'application/json','x-admin-token':token}, body: JSON.stringify({ name })});
+                if(!r.ok) throw new Error(r.status);
+                newInput.value=''; await fetchWorkers(); note('נוסף','#2e7d32');
+                document.dispatchEvent(new Event('refdata:refresh-requested'));
+            } catch(e){ if(e.message==='403'){ sessionStorage.removeItem('__admin_token'); note('אסימון שגוי','#d32f2f'); } else note('נכשל בהוספה','#d32f2f'); }
+        }
+        async function delWorker(el){
+            const name = el.dataset.name; const id=el.dataset.id; if(!confirm('למחוק עובד? '+name)) return;
+            note('מוחק...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון','#d32f2f'); return; }
+                const r = await fetch('/api/worker-names/'+encodeURIComponent(id||name), { method:'DELETE', headers:{'x-admin-token':token}});
+                if(!r.ok) throw new Error(r.status);
+                await fetchWorkers(); note('נמחק','#2e7d32');
+                document.dispatchEvent(new Event('refdata:refresh-requested'));
+            } catch(e){ if(e.message==='403'){ sessionStorage.removeItem('__admin_token'); note('אסימון שגוי','#d32f2f'); } else note('מחיקה נכשלה','#d32f2f'); }
+        }
+        async function exportSnapshot(){
+            note('מייצא...');
+            try {
+                const token = await ensureToken(); if(!token){ note('לא הוזן אסימון','#d32f2f'); return; }
+                const r = await fetch('/api/worker-names/export',{method:'POST', headers:{'x-admin-token':token}});
+                if(!r.ok) throw new Error(r.status);
+                note('נשמר לקובץ (workers.json)','#2e7d32');
+            } catch(e){ if(e.message==='403'){ sessionStorage.removeItem('__admin_token'); note('אסימון שגוי','#d32f2f'); } else note('ייצוא נכשל','#d32f2f'); }
+        }
+        btn?.addEventListener('click', ()=>{ dlg.showModal(); fetchWorkers(); });
+        addBtn?.addEventListener('click', addWorker);
+        newInput?.addEventListener('keydown', e=>{ if(e.key==='Enter') addWorker(); });
+        closeBtn?.addEventListener('click', ()=> dlg.close());
+        exportBtn?.addEventListener('click', exportSnapshot);
+        listBox?.addEventListener('click', e=>{ const b=e.target.closest('.del-worker'); if(b) delWorker(b); });
+        document.addEventListener('refdata:refresh-requested', async ()=>{
+            try { const ref = await window.apiLayer?.loadReference?.(); if(ref?.workers){ window.workers = ref.workers.map(w=>w.name); window.PROJECT_WORKERS = window.workers; } } catch(_){ }
+        });
+    })();
+    </script>
 </body>
 </html>

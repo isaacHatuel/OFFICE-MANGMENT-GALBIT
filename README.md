@@ -17,6 +17,37 @@ docker compose up -d --build
 - API Health: http://localhost:3001/api/health
 - Postgres: localhost:5432 (user: officeuser / pass: officepass / db: officedb)
 
+## מצב פיתוח (Live Dev)
+כדי לעבוד בלי לבנות כל שינוי:
+1. קיים קובץ `docker-compose.override.yml` שמחליף:
+	- app → רץ עם nodemon (`npm run dev`).
+	- frontend → nginx עם bind mount לכל הפרויקט (קורא קבצים חיים).
+2. יש מנגנון live-reload (SSE) בשרת (`/__livereload`) + סקריפט ב־`index2.html` שמבצע ריענון אוטומטי בכל שינוי קובץ.
+
+הפעלה:
+```bash
+docker compose down
+docker compose up -d
+```
+אין צורך --build כדי לראות שינוי בקבצי frontend / server.
+
+בדיקה:
+1. פתח http://localhost:3000
+2. ערוך `frontend/modules/journalUI.js` ושמור.
+3. בתוך שנייה העמוד יתרענן אוטומטית (Console: `[live-reload] change detected -> reload`).
+
+חזרה למצב “פרודקשן” מלא (בדיקת אימג'ים):
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+אם אין ריענון:
+- ודא שאתה ב- localhost (הסקריפט מותנה ב-host).
+- בדוק Network שהחיבור ל- `__livereload/` פתוח (EventStream).
+- ב-Windows לפעמים watch recursive מוגבל – שינויים עמוקים מאוד עלולים לא להדליק אירוע; שמור מחדש את הקובץ העליון אם צריך.
+
+
 ## משתני סביבה חשובים (service app)
 | Variable | Default | Purpose |
 |----------|---------|---------|

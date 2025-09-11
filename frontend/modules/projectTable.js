@@ -1,8 +1,19 @@
 // מודול רינדור וניהול טבלת פרויקטים (הוצאה מ-index2.html)
 // מספק פונקציות: ensureParentRow, addChildRow, updateChildRow, recomputeParentStatusInTable, toggleParentCollapse, inlineEditOrderId
 
+// --- Autosave helpers (debounced) ---
+let __projectsAutosaveTimer = null;
+function scheduleProjectsAutosave() {
+  // Reduced debounce to near-immediate persistence (universal autosave requirement)
+  try { if (__projectsAutosaveTimer) clearTimeout(__projectsAutosaveTimer); } catch(_){}
+  __projectsAutosaveTimer = setTimeout(()=> {
+    try { saveProjectsToStorage(); } catch(e){ console.warn('autosave failed', e); }
+  }, 280); // 280ms for smoother typing without over-spamming writes
+}
+
 function saveProjectsToStorage() {
   try {
+    // Build live snapshot מה-DOM
     const rows = Array.from(document.querySelectorAll('tr.child-row')).map(tr => {
       const tds = tr.querySelectorAll('td');
       // Detect dynamic negative status columns by header text (starts with 'סטטוס שלילי')
@@ -23,7 +34,7 @@ function saveProjectsToStorage() {
       if (!negStatuses.length) {
         [6,7,8].forEach(idx => { const v = tds[idx]?.querySelector('select')?.value || tds[idx]?.innerText || ''; if (v) negStatuses.push(v); });
       }
-        const obj = {
+  const obj = {
           type: 'child',
           orderId: tr.dataset.orderId,
           date: tds[0]?.querySelector('input')?.value || tds[0]?.innerText || '',
@@ -34,7 +45,8 @@ function saveProjectsToStorage() {
         status: tds[5]?.querySelector('select')?.value || tds[5]?.innerText || '',
         negStatuses: Array.from(new Set(negStatuses)).slice(0,10), // cap for safety
         notes: tds[theadNotesIndex(tds)]?.querySelector('input')?.value || tds[theadNotesIndex(tds)]?.innerText || '',
-        treated: false, delivered: false, finished: false
+  treated: false, delivered: false, finished: false,
+  lastLocalEdit: Date.now()
       };
       // Derive checkbox indices dynamically relative to notes cell
       const notesIdx = theadNotesIndex(tds);
@@ -48,7 +60,7 @@ function saveProjectsToStorage() {
       return obj;
     });
     // שמירת הורים
-    const parents = Array.from(document.querySelectorAll('tr.parent-row')).map(pr => {
+  const parents = Array.from(document.querySelectorAll('tr.parent-row')).map(pr => {
       const bar = pr.querySelector('.parent-bar');
       return {
         type: 'parent',
@@ -60,11 +72,21 @@ function saveProjectsToStorage() {
         treated: bar?.querySelector('.parent-treated')?.checked || false,
         delivered: bar?.querySelector('.parent-delivered')?.checked || false,
         finished: bar?.querySelector('.parent-finished')?.checked || false,
-        collapsed: pr.classList.contains('collapsed')
+        collapsed: pr.classList.contains('collapsed'),
+        lastLocalEdit: Date.now()
       };
     });
+    // Preserve stable lastLocalEdit for unchanged records (shallow compare core fields)
     const all = parents.concat(rows);
-    localStorage.setItem('projects', JSON.stringify(all));
+    if(window.stateStore){
+      window.stateStore.bulkUpsert(all, 'projectTable.saveSnapshot');
+      window.stateStore.flushSoon('projectTable.saveSnapshot');
+      try { console.debug('[persist][projects] projectTable via stateStore snapshot', all.length); } catch(_){ }
+    } else {
+      try { localStorage.setItem('projects', JSON.stringify(all)); } catch(_){ }
+      try { localStorage.setItem('projects_backup', JSON.stringify(all)); } catch(_){ }
+    }
+    if (window.showSavedIndicator) window.showSavedIndicator();
   } catch(e) { console.warn('saveProjectsToStorage failed', e); }
 }
 
@@ -72,12 +94,23 @@ function ensureParentRow(parentData, isDoneTable) {
   const tableId = isDoneTable ? '#projects-table-done' : '#projects-table-active';
   const tbody = document.querySelector(`${tableId} tbody`);
   if (!tbody) return null;
-  if (!parentData.orderId || !parentData.client || !parentData.projectName || !parentData.date) { console.error('ensureParentRow: missing field', parentData); return null; }
+  // Auto-heal missing critical fields instead of aborting (prevents journal/production sync failures)
+  if (!parentData.orderId || !parentData.client || !parentData.projectName || !parentData.date) {
+    const healed = { ...parentData };
+    const today = new Date().toLocaleDateString('he-IL');
+    if (!healed.orderId) healed.orderId = 'FIX-' + Math.random().toString(36).slice(2,8);
+    if (!healed.date) healed.date = today;
+    if (!healed.client) healed.client = '(לקוח חסר)';
+    if (!healed.projectName) healed.projectName = '(פרויקט חסר)';
+    console.warn('ensureParentRow: auto-healed missing field(s)', parentData, '=>', healed);
+    parentData = healed;
+  }
   let row = tbody.querySelector(`tr.parent-row[data-order-id="${parentData.orderId}"]`);
   if (!row) {
     row = document.createElement('tr');
     row.className='parent-row';
     row.dataset.orderId = parentData.orderId;
+  if (parentData.projectId) row.dataset.projectId = parentData.projectId;
     // Create 14 aligned cells matching headers
     for (let i=0;i<14;i++) { row.appendChild(document.createElement('td')); }
     tbody.appendChild(row);
@@ -107,6 +140,7 @@ function ensureParentRow(parentData, isDoneTable) {
   row.querySelector('.client').textContent = parentData.client || '—';
   row.querySelector('.project').textContent = parentData.projectName || '—';
   row.querySelector('.parent-date').textContent = parentData.date || '';
+  if (parentData.projectId) row.dataset.projectId = parentData.projectId; // keep updated
   const oidSpan = row.querySelector('.order-id');
   if (oidSpan) oidSpan.textContent = parentData.orderId;
   row.querySelector('.parent-treated').checked = !!parentData.treated;
@@ -202,16 +236,55 @@ function fillChildRow(tr, data) {
   cells.forEach((html, idx) => { const td=document.createElement('td'); td.innerHTML = html; tr.appendChild(td); if(idx===5) td.classList.add('status-cell'); });
   // attach change listeners to persist + refresh tracking
   Array.from(tr.querySelectorAll('input,select')).forEach(el => {
+    // Existing change (commit) save
     el.addEventListener('change', () => {
       saveProjectsToStorage();
-      try { const orderId = tr.dataset.orderId; recomputeParentStatusInTable('#projects-table-active', orderId); } catch(_){}
-      if (typeof window.syncProductionTrackingTable === 'function') {
-        try { window.syncProductionTrackingTable(); } catch(_){}
-      }
-      if (typeof window.syncJournalTable === 'function') {
-        try { window.syncJournalTable(); } catch(_){}
+      try { const orderId = tr.dataset.orderId; recomputeParentStatusInTable('#projects-table-active', orderId); } catch(_){ }
+      if (typeof window.syncProductionTrackingTable === 'function') { try { window.syncProductionTrackingTable(); } catch(_){ } }
+      if (typeof window.syncJournalTable === 'function') { try { window.syncJournalTable(); } catch(_){ } }
+      // Reverse sync: if this change is in a negative status select, reflect into productionTracking
+      try {
+        if (el.tagName==='SELECT') {
+          // Determine if header of this cell is a negative status header
+          const td = el.closest('td');
+          const row = td?.parentElement;
+          const table = row?.closest('table');
+          const tds = row?.querySelectorAll('td') || [];
+          if (table) {
+            const headerCells = table.querySelectorAll('thead tr th');
+            let cellIndex=-1; for(let i=0;i<tds.length;i++){ if(tds[i]===td){ cellIndex=i; break; } }
+            if(cellIndex>=0 && headerCells[cellIndex] && headerCells[cellIndex].innerText.startsWith('סטטוס שלילי')){
+              if (typeof window.reverseSyncProductionTrackingFromProjectRow === 'function') {
+                window.reverseSyncProductionTrackingFromProjectRow(row);
+              }
+            }
+          }
+        }
+      } catch(err){ /* ignore */ }
+      // Clear manual edit flag after change processed
+      if (window.__negManualEditActive) setTimeout(()=>{ window.__negManualEditActive=false; },50);
+    });
+    // Mark manual edit start on focus of negative status select
+    el.addEventListener('focus', () => {
+      if(el.tagName==='SELECT'){
+        try {
+          const td = el.closest('td');
+          const row = td?.parentElement; const table = row?.closest('table');
+          const tds = row?.querySelectorAll('td') || [];
+          if(table){
+            const headerCells = table.querySelectorAll('thead tr th');
+            let cellIndex=-1; for(let i=0;i<tds.length;i++){ if(tds[i]===td){ cellIndex=i; break; } }
+            if(cellIndex>=0 && headerCells[cellIndex] && headerCells[cellIndex].innerText.startsWith('סטטוס שלילי')){
+              window.__negManualEditActive = true;
+            }
+          }
+        } catch(_){ }
       }
     });
+    // New: live autosave for text inputs while typing (debounced) so רענון פתאומי לא יפיל עריכה באמצע
+    if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'number')) {
+      el.addEventListener('input', () => { scheduleProjectsAutosave(); });
+    }
   });
   // action buttons handlers (event delegation per row for robustness)
   const editBtn = tr.querySelector('.edit-btn');
@@ -466,17 +539,70 @@ window.onCheckBoxChange = onCheckBoxChange;
 
 function deleteProjectRow(tr) {
   if (!tr) return;
+  try { console.debug('[legacyDelete] invoked', { type: tr.classList.contains('parent-row')?'parent': (tr.classList.contains('child-row')?'child':'other'), orderId: tr.dataset.orderId, projectId: tr.dataset.projectId, boardId: tr.dataset.boardId }); } catch(_){ }
   if (tr.classList.contains('child-row')) {
     const orderId = tr.dataset.orderId;
+    // Tombstone board (if has boardId) to stop resurrection during sync
+    try {
+      const boardId = tr.dataset.boardId;
+      if (boardId) {
+        const key='__deletedBoardIds';
+        let arr=[]; try { arr=JSON.parse(localStorage.getItem(key)||'[]'); } catch(_){ }
+        if(!arr.includes(Number(boardId))) { arr.push(Number(boardId)); localStorage.setItem(key, JSON.stringify(arr)); }
+      }
+    } catch(_){ }
+    // Collect identifiers before removal
+    let client='', projectName='', boardName='';
+    try {
+      const tds = tr.querySelectorAll('td');
+      client = tds[1]?.querySelector('input')?.value || tds[1]?.innerText || '';
+      projectName = tds[2]?.querySelector('input')?.value || tds[2]?.innerText || '';
+      boardName = tds[3]?.querySelector('input')?.value || tds[3]?.innerText || '';
+    } catch(_){ }
     const tbody = tr.closest('tbody');
     tr.remove();
     if (!tbody.querySelector(`tr.child-row[data-order-id="${orderId}"]`)) {
       const parentRow = tbody.querySelector(`tr.parent-row[data-order-id="${orderId}"]`);
       if (parentRow) parentRow.remove();
     }
+    // Remove only this board's journal entries
+    try { if (window.removeJournalEntries) window.removeJournalEntries(client, projectName, boardName); } catch(_){ }
   } else if (tr.classList.contains('parent-row')) {
     const tbody = tr.closest('tbody');
     const orderId = tr.dataset.orderId;
+    const projectId = tr.dataset.projectId;
+  const normalizeSig = (c,p) => (c||'').trim().replace(/\s+/g,' ') + '|' + (p||'').trim().replace(/\s+/g,' ');
+    // Tombstone parent orderId (prevents server sync from re-adding)
+    try {
+      const key='__deletedOrderIds';
+      let arr=[]; try { arr=JSON.parse(localStorage.getItem(key)||'[]'); } catch(_){ }
+      if(!arr.includes(orderId)) { arr.push(orderId); localStorage.setItem(key, JSON.stringify(arr)); }
+    } catch(_){ }
+    // Tombstone projectId as well (so even if orderId edited, server project suppressed)
+    try {
+      if (projectId) {
+        const key='__deletedProjectIds';
+        let arr=[]; try { arr=JSON.parse(localStorage.getItem(key)||'[]'); } catch(_){ }
+        if(!arr.includes(Number(projectId))) { arr.push(Number(projectId)); localStorage.setItem(key, JSON.stringify(arr)); }
+      }
+    } catch(_){ }
+    // Tombstone by (client|projectName) signature in case projectId/orderId unknown at deletion time
+    try {
+      const clientTxt = tr.querySelector('.client')?.textContent?.trim() || '';
+      const projTxt = tr.querySelector('.project')?.textContent?.trim() || '';
+      if (clientTxt || projTxt) {
+        const sigKey='__deletedProjectSignatures';
+        let arr=[]; try { arr=JSON.parse(localStorage.getItem(sigKey)||'[]'); } catch(_){ }
+    const sig = normalizeSig(clientTxt, projTxt);
+        if (!arr.includes(sig)) { arr.push(sig); localStorage.setItem(sigKey, JSON.stringify(arr)); }
+      }
+    } catch(_){ }
+    // Capture client & project from bar
+    let client='', projectName='';
+    try {
+      client = tr.querySelector('.client')?.textContent || '';
+      projectName = tr.querySelector('.project')?.textContent || '';
+    } catch(_){ }
     // remove all subsequent children until next parent
     let n = tr.nextElementSibling;
     while (n && !n.classList.contains('parent-row')) {
@@ -485,8 +611,32 @@ function deleteProjectRow(tr) {
       n = next;
     }
     tr.remove();
+    // If this was an unsynced local-only project (no projectId), purge any queued creation + local array entries now
+    if (!projectId) {
+      try {
+        if (window.cancelQueuedCreation) window.cancelQueuedCreation(orderId);
+        let arr=[]; try { arr = JSON.parse(localStorage.getItem('projects')||'[]'); } catch(_){ }
+        if (Array.isArray(arr)) {
+          const lenBefore = arr.length;
+          arr = arr.filter(r => r.orderId !== orderId);
+          if (arr.length !== lenBefore) {
+            localStorage.setItem('projects', JSON.stringify(arr));
+            localStorage.setItem('projects_backup', JSON.stringify(arr));
+            try { console.debug('[purge] removed local unsynced project orderId', orderId); } catch(_){ }
+          }
+        }
+      } catch(_){ }
+    }
+    // Remove all journal entries for this client+project (all boards)
+    try { if (window.removeJournalEntries) window.removeJournalEntries(client, projectName); } catch(_){ }
   }
   saveProjectsToStorage();
+  try { console.debug('[legacyDelete] after save, tombstone sets', {
+    delOrders: JSON.parse(localStorage.getItem('__deletedOrderIds')||'[]'),
+    delBoards: JSON.parse(localStorage.getItem('__deletedBoardIds')||'[]'),
+    delProjects: JSON.parse(localStorage.getItem('__deletedProjectIds')||'[]'),
+    delSigs: JSON.parse(localStorage.getItem('__deletedProjectSignatures')||'[]')
+  }); } catch(_){ }
   if (typeof window.syncJournalTable === 'function') { try { window.syncJournalTable(); } catch(_){} }
   // recompute all parents in both tables
   ['#projects-table-active','#projects-table-done'].forEach(sel => {
@@ -518,6 +668,7 @@ function duplicateProjectRow(tr) {
     finished: tds[12]?.querySelector('input')?.checked || false
   };
   addChildRow(data, data.finished);
+  try { if (window.showSavedIndicator) window.showSavedIndicator(); } catch(_){ }
 }
 window.duplicateProjectRow = duplicateProjectRow;
 
@@ -553,6 +704,28 @@ function openInlineNoteEditor(notesTd){
     document.body.appendChild(ov);
     const ta = ov.querySelector('textarea');
     ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    // Live autosave while typing inside note editor (projects + journal)
+    let liveTimer=null;
+    const livePersist = () => {
+      try {
+        const val = ta.value.trim();
+        if (hidden) hidden.value = val; // keep hidden input up to date for saveProjectsToStorage
+        scheduleProjectsAutosave();
+        // Mirror into journal if applicable (without closing overlay)
+        const journalRow = notesTd.closest('#tasks-journal-table tr');
+        if (journalRow && journalRow.dataset.journalKey) {
+          let journalData={};
+          try { journalData = JSON.parse(localStorage.getItem('journalTasks')||'{}'); } catch(e){ journalData={}; }
+          if(!journalData[journalRow.dataset.journalKey]) journalData[journalRow.dataset.journalKey] = {};
+          journalData[journalRow.dataset.journalKey].note = val;
+          localStorage.setItem('journalTasks', JSON.stringify(journalData));
+        }
+      } catch(e){ /* ignore */ }
+    };
+    ta.addEventListener('input', ()=>{
+      try { if (liveTimer) clearTimeout(liveTimer); } catch(_){}
+      liveTimer = setTimeout(()=>{ livePersist(); if (window.showSavedIndicator) window.showSavedIndicator(); }, 300);
+    });
     const commit = () => {
       const val = ta.value.trim();
       if (hidden) hidden.value = val;
@@ -576,6 +749,8 @@ function openInlineNoteEditor(notesTd){
         }
       } catch(e){ console.warn('journal note save failed', e); }
       ov.remove();
+      if (window.__activeNoteCommit === commit) delete window.__activeNoteCommit;
+      try { if (window.showSavedIndicator) window.showSavedIndicator(); } catch(_){ }
     };
     const cancel = () => { ov.remove(); };
     ov.querySelector('.note-save-btn').addEventListener('click', commit);
@@ -587,16 +762,96 @@ function openInlineNoteEditor(notesTd){
     // click outside closes (commit)
     const outsideHandler = (e) => { if (!ov.contains(e.target)) { commit(); document.removeEventListener('mousedown', outsideHandler); } };
     setTimeout(()=> document.addEventListener('mousedown', outsideHandler), 0);
+    // Expose commit so beforeunload יכול לשמור בעת סגירת לשונית פתאומית
+    window.__activeNoteCommit = commit;
   } catch(e){ console.warn('openInlineNoteEditor failed', e); }
 }
 window.openInlineNoteEditor = openInlineNoteEditor;
 
+// Commit any פתיחת הערת overlay לפני עזיבת הדף & final autosave of projects
+if (!window.__projectsUnloadBound) {
+  window.addEventListener('beforeunload', () => {
+    try { if (window.__activeNoteCommit) window.__activeNoteCommit(); } catch(_){}
+    try { saveProjectsToStorage(); } catch(_){}
+    // Flush מיידי כדי למנוע איבוד שינוי בגלל debounce
+    try { if (window.stateStore) window.stateStore.flushNow('unload'); } catch(_){ }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      try { if (window.__activeNoteCommit) window.__activeNoteCommit(); } catch(_){}
+      try { saveProjectsToStorage(); } catch(_){}
+      try { if (window.stateStore) window.stateStore.flushNow('visibilityHidden'); } catch(_){ }
+    }
+  });
+  window.__projectsUnloadBound = true;
+}
+
 function loadProjectsFromStorage() {
   const raw = localStorage.getItem('projects');
-  if (!raw) return;
+  if (!raw) {
+    // Attempt recovery from backup
+    try {
+      const backup = localStorage.getItem('projects_backup');
+      if (backup) {
+        console.warn('[projects] recovering from backup snapshot');
+        if(window.stateStore){
+          try {
+            const parsed = JSON.parse(backup);
+            if(Array.isArray(parsed)) { window.stateStore.replaceAllFromArray(parsed, 'projectTable.recover'); window.stateStore.flushNow('projectTable.recover'); }
+          } catch(e){ localStorage.setItem('projects', backup); }
+        } else {
+          localStorage.setItem('projects', backup);
+        }
+        try { console.warn('[persist][projects] recovered from backup (projects empty)'); } catch(_){ }
+      } else return;
+    } catch(e){ return; }
+  }
   let items;
   try { items = JSON.parse(raw); } catch(e){ console.warn('loadProjectsFromStorage parse fail', e); return; }
   if (!Array.isArray(items)) return;
+  // Apply tombstones (deleted identifiers)
+  try {
+    let delOrders=[]; let delBoards=[];
+    try { delOrders = JSON.parse(localStorage.getItem('__deletedOrderIds')||'[]'); } catch(_){ }
+    try { delBoards = JSON.parse(localStorage.getItem('__deletedBoardIds')||'[]'); } catch(_){ }
+    let delProjects=[]; try { delProjects = JSON.parse(localStorage.getItem('__deletedProjectIds')||'[]'); } catch(_){ }
+  let delSigs=[]; try { delSigs = JSON.parse(localStorage.getItem('__deletedProjectSignatures')||'[]'); } catch(_){ }
+    if (delOrders.length || delBoards.length) {
+      items = items.filter(r => {
+        if (r.type==='parent' && delOrders.includes(r.orderId)) return false;
+        if (r.type==='child') {
+          if (r.boardId && delBoards.includes(r.boardId)) return false;
+          if (delOrders.includes(r.orderId)) return false;
+        }
+        return true;
+      });
+    }
+    if (delProjects.length) {
+      items = items.filter(r => {
+        if (r.projectId && delProjects.includes(r.projectId)) return false;
+        return true;
+      });
+    }
+    if (delSigs.length) {
+      // Normalize incoming records signature before compare
+      items = items.filter(r => {
+        const sig = ((r.client||'').trim().replace(/\s+/g,' ')) + '|' + ((r.projectName||'').trim().replace(/\s+/g,' '));
+        if ((r.type==='parent' || r.type==='child') && delSigs.includes(sig)) return false;
+        return true;
+      });
+    }
+  } catch(_){ }
+  // Self-healing: ensure required fields for parent rows so other modules (journal) won't fail silently
+  let healed=false; const today=new Date().toLocaleDateString('he-IL');
+  items.forEach(r => {
+    if(r && r.type==='parent'){
+      if(!r.orderId){ r.orderId='FIX-'+Math.random().toString(36).slice(2,8); healed=true; }
+      if(!r.date){ r.date = today; healed=true; }
+      if(!r.client){ r.client='(לקוח חסר)'; healed=true; }
+      if(!r.projectName){ r.projectName='(פרויקט חסר)'; healed=true; }
+    }
+  });
+  if(healed){ try { localStorage.setItem('projects', JSON.stringify(items)); } catch(_){ } }
   const hasStructured = items.some(it => it && it.type);
   if (hasStructured) {
     // Clear existing rows to avoid duplication from multiple invocations

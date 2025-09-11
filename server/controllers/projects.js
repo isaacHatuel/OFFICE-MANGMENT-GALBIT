@@ -41,12 +41,12 @@ exports.getAll = async (req, res) => {
     if (req.query.q) { params.push('%'+req.query.q+'%'); filters.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
     const where = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
     const baseSelect = `SELECT p.id, p.name, p.start_date, p.end_date, p.budget, p.description,
-                    p.treated, p.delivered, p.finished,
+                    p.treated, p.delivered, p.finished, p.deleted_at,
                     c.name AS client, s.name AS status
                  FROM projects p
                  LEFT JOIN clients c ON c.id = p.client_id
                  LEFT JOIN statuses s ON s.id = p.status_id
-                 ${where}`;
+                 ${where} ${where? ' AND ':'WHERE '} p.deleted_at IS NULL`;
         if (usePagination) {
         const data = await db.query(baseSelect + ` ORDER BY p.id DESC LIMIT $${params.length+1} OFFSET $${params.length+2}`, [...params, limit, offset]);
         const count = await db.query('SELECT COUNT(*)::int AS total FROM projects p LEFT JOIN clients c ON c.id = p.client_id LEFT JOIN statuses s ON s.id = p.status_id '+where, params);
@@ -69,10 +69,13 @@ exports.create = async (req, res) => {
         const clientId = client ? (await db.query('SELECT id FROM clients WHERE name=$1', [client])).rows[0]?.id : null;
         const statusId = status ? (await db.query('SELECT id FROM statuses WHERE name=$1', [status])).rows[0]?.id : null;
         const result = await db.query(
-            'INSERT INTO projects (name, client_id, status_id, start_date, end_date, budget, description, treated, delivered, finished) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,false),COALESCE($9,false),COALESCE($10,false)) RETURNING *',
-            [name, clientId, statusId, start_date || null, end_date || null, budget || null, description || null, parsed.data.treated, parsed.data.delivered, parsed.data.finished]
+            'INSERT INTO projects (name, client_id, status_id, start_date, end_date, budget, description, treated, delivered, finished) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,false),COALESCE($9,false),COALESCE($10,false)) RETURNING id,name,start_date,end_date,budget,description,treated,delivered,finished',
+            [name, clientId, statusId, start_date || null, end_date || null, budget || null, description || null, !!parsed.data.treated, !!parsed.data.delivered, !!parsed.data.finished]
         );
-        res.status(201).json(result.rows[0]);
+        const created = result.rows[0];
+        created.client = client || null;
+        created.status = status || null;
+        res.status(201).json(created);
     } catch (err) {
         console.error('projects.create error', err);
         res.status(500).json({ error: 'Failed to create project' });
@@ -118,8 +121,16 @@ exports.remove = async (req, res) => {
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'invalid id' });
     try {
-        await db.query('DELETE FROM projects WHERE id=$1', [id]);
-        res.json({ deleted: true });
+        if (req.query.soft === 'true') {
+            // Mark soft deleted
+            await db.query('UPDATE projects SET deleted_at = NOW() WHERE id=$1', [id]);
+            await db.query('UPDATE project_boards SET deleted_at = NOW() WHERE project_id=$1', [id]);
+            return res.json({ deleted: true, soft: true });
+        }
+        // Explicit cascade physical delete (fallback)
+        await db.query('DELETE FROM project_boards WHERE project_id=$1', [id]);
+        const del = await db.query('DELETE FROM projects WHERE id=$1 RETURNING id', [id]);
+        res.json({ deleted: !!del.rows[0], soft: false });
     } catch (err) {
         console.error('projects.remove error', err);
         res.status(500).json({ error: 'Failed to delete project' });

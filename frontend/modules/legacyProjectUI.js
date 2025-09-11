@@ -9,12 +9,14 @@ export function showTab(idx) {
   document.querySelectorAll('.tab-content').forEach((el, i) => el.classList.toggle('active', i === idx));
   if (typeof window.syncProductionTrackingTable === 'function') window.syncProductionTrackingTable();
   if (idx === 1 && typeof window.syncJournalTable === 'function') window.syncJournalTable();
+  try { localStorage.setItem('__main_activeTab', String(idx)); } catch(_){}
 }
 window.showTab = showTab;
 
 // נתונים סטטיים (לשימוש הדיאלוג) – מוזנים מ-window כפי שמוגדר ב- index2.html
-export const clients = Array.isArray(window.PROJECT_CLIENTS) ? window.PROJECT_CLIENTS : [];
-export const workers = Array.isArray(window.PROJECT_WORKERS) ? window.PROJECT_WORKERS : [];
+// לקוחות כעת נטענים מהשרת (window.clients מוזן ב-main.js אחרי loadReference). fallback ריק עד שיגיעו נתונים.
+export const clients = Array.isArray(window.clients) ? window.clients : (Array.isArray(window.PROJECT_CLIENTS)? window.PROJECT_CLIENTS : []);
+export const workers = Array.isArray(window.PROJECT_WORKERS) ? window.PROJECT_WORKERS : (Array.isArray(window.workers)? window.workers: []);
 export const statusOptions = Array.isArray(window.PROJECT_STATUS_OPTIONS) ? window.PROJECT_STATUS_OPTIONS : [];
 export const negativeStatuses = Array.isArray(window.PROJECT_NEGATIVE_STATUSES) ? window.PROJECT_NEGATIVE_STATUSES : [];
 
@@ -34,7 +36,10 @@ export function openProjectDialog(row=null) {
   const form = document.getElementById('project-form');
   if (!dialog || !form) return;
   form.reset();
-  fillDialogSelect('dialog-client', clients);
+  // Use fresh runtime list (window.clients populated asynchronously after loadReference())
+  const dynamicClients = Array.isArray(window.clients) ? window.clients : (Array.isArray(window.PROJECT_CLIENTS)? window.PROJECT_CLIENTS : []);
+  fillDialogSelect('dialog-client', dynamicClients);
+  try { console.debug('[dialog] fill clients initial len=', dynamicClients.length); } catch(_){}
   fillDialogSelect('dialog-worker', workers);
   fillDialogSelect('dialog-status', statusOptions);
   fillDialogSelect('dialog-neg1', negativeStatuses);
@@ -105,8 +110,40 @@ export function openProjectDialog(row=null) {
     }
   }
   dialog.showModal();
+  // If list was empty at initial fill and data arrived meanwhile, refresh once after microtask
+  // Retry population (אם המשתמש פתח מהר לפני שטענו רפרנס) – עד 5 ניסיונות בהפרש 400ms
+  let attempt = 0;
+  const retry = () => {
+    attempt++;
+    const sel = document.getElementById('dialog-client');
+    if(!sel || !dialog.open) return; // dialog closed -> stop
+    if (Array.isArray(window.clients) && window.clients.length && sel.options.length <= 1) {
+      fillDialogSelect('dialog-client', window.clients);
+      try { console.debug('[dialog] clients populated on retry', window.clients.length); } catch(_){}
+      return;
+    }
+    if (sel.options.length > 1) return; // already populated
+    if (attempt < 6) setTimeout(retry, 400);
+  };
+  setTimeout(retry, 100); // initial delayed attempt
 }
 window.openProjectDialog = openProjectDialog;
+
+// עדכון רשימות בדיאלוג כאשר נתוני רפרנס מגיעים מהשרת
+if(!window.__legacyDialogRefdataBound){
+  document.addEventListener('refdata:updated', ()=>{
+    try {
+      if(!document.getElementById('project-dialog')?.open) return; // עדכון רק כשהדיאלוג פתוח
+      fillDialogSelect('dialog-client', Array.isArray(window.clients)? window.clients : []);
+      fillDialogSelect('dialog-worker', Array.isArray(window.PROJECT_WORKERS)? window.PROJECT_WORKERS : (Array.isArray(window.workers)? window.workers: []));
+      fillDialogSelect('dialog-status', Array.isArray(window.PROJECT_STATUS_OPTIONS)? window.PROJECT_STATUS_OPTIONS : []);
+      fillDialogSelect('dialog-neg1', Array.isArray(window.PROJECT_NEGATIVE_STATUSES)? window.PROJECT_NEGATIVE_STATUSES : []);
+      fillDialogSelect('dialog-neg2', Array.isArray(window.PROJECT_NEGATIVE_STATUSES)? window.PROJECT_NEGATIVE_STATUSES : []);
+      fillDialogSelect('dialog-neg3', Array.isArray(window.PROJECT_NEGATIVE_STATUSES)? window.PROJECT_NEGATIVE_STATUSES : []);
+    } catch(_){ }
+  });
+  window.__legacyDialogRefdataBound = true;
+}
 
 export function closeProjectDialog(){
   const dlg = document.getElementById('project-dialog');
@@ -114,5 +151,16 @@ export function closeProjectDialog(){
   editRow = null; window.editRow = null;
 }
 window.closeProjectDialog = closeProjectDialog;
+
+// Restore last active tab on load (defaults to 0)
+if(!window.__tabRestoreBound){
+  window.addEventListener('DOMContentLoaded', ()=>{
+    try {
+      const saved = parseInt(localStorage.getItem('__main_activeTab')||'0',10);
+      if(!isNaN(saved)) showTab(saved);
+    } catch(_){}
+  });
+  window.__tabRestoreBound = true;
+}
 
 // NOTE: generateOrderId ו-loadProjectsFromStorage מסופקים דרך projectTable.js כעת.

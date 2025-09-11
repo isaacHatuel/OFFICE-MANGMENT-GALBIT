@@ -61,6 +61,7 @@
               prodData[key][col]=sel.value;
               localStorage.setItem('productionTracking', JSON.stringify(prodData));
               syncNegativeStatusesToProjects(key, prodData[key]);
+              if (window.showSavedIndicator) window.showSavedIndicator();
             });
             td.appendChild(sel);
             return td;
@@ -95,6 +96,8 @@
   }
 
   function syncNegativeStatusesToProjects(key, prodRow){
+  // Guard to prevent recursion when reverse sync updates productionTracking then triggers full table sync
+  if (window.__negReverseLock) return;
     const negativeMap=[
       {col:'structure', values:["חסר מבנה","חסר פנאלים","חסר מודול פנאלים","בהזמנה"]},
       {col:'equipment', values:["חסר ציוד","ציוד בהזמנה"]},
@@ -102,36 +105,143 @@
       {col:'wiring', values:["חסר גידים"]},
       {col:'test', values:["נכשל בבדיקה"]}
     ];
-    let negatives=[];
+    const negatives=[];
     negativeMap.forEach(item=>{ if(prodRow && item.values.includes(prodRow[item.col])) negatives.push(prodRow[item.col]); });
-    const allRows=document.querySelectorAll('#projects-table-active tbody tr.child-row');
-    for(const tr of allRows){
-      const tds=tr.querySelectorAll('td');
-      const rowKey=[tds[0].innerText,tds[1].innerText,tds[2].innerText,tds[3].innerText].join('|');
-      let notesIdx=-1;
-      const thead=tr.parentElement.parentElement.querySelector('thead tr');
-      for(let i=0;i<thead.children.length;i++){ if(thead.children[i].innerText.trim()==='הערות'){ notesIdx=i; break; } }
-      if(notesIdx===-1) notesIdx=9;
-      if(rowKey===key){
-        ensureNegativeStatusColumns(negatives.length);
-        for(let i=0;i<negatives.length;i++){ if(tds[6+i] && (6+i)<notesIdx) tds[6+i].innerText=negatives[i]; }
-        for(let i=negatives.length;(6+i)<notesIdx && i<10;i++){ if(tds[6+i]) tds[6+i].innerText=''; }
-      }
+    // עדכון DOM (projects active table) אלא אם המשתמש כרגע בעיצומה של עריכה ידנית
+    if(!window.__negManualEditActive){
+      const allChildRows=document.querySelectorAll('#projects-table-active tbody tr.child-row');
+      window.__negForwardApplying = true;
+      try {
+        for(const tr of allChildRows){
+          const tds=tr.querySelectorAll('td');
+          const rowKey=[tds[0]?.innerText,tds[1]?.innerText,tds[2]?.innerText,tds[3]?.innerText].join('|');
+          if(rowKey!==key) continue;
+          let notesIdx=-1; const thead=tr.parentElement.parentElement.querySelector('thead tr');
+          for(let i=0;i<thead.children.length;i++){ if(thead.children[i].innerText.trim()==='הערות'){ notesIdx=i; break; } }
+          if(notesIdx===-1) notesIdx=9;
+          ensureNegativeStatusColumns(negatives.length);
+          // כתיבת ערכים
+          for(let i=0;i<negatives.length;i++){
+            const cellIndex=6+i; if(cellIndex>=notesIdx) break;
+            const td=tds[cellIndex]; if(!td) continue;
+            const sel=td.querySelector('select'); const val=negatives[i];
+            if(sel){
+              if(!Array.from(sel.options).some(o=>o.value===val)) { const opt=document.createElement('option'); opt.value=val; opt.textContent=val; sel.appendChild(opt); }
+              sel.value=val; sel.dispatchEvent(new Event('change',{bubbles:true}));
+            } else { td.textContent=val; }
+          }
+          for(let i=negatives.length;(6+i)<notesIdx && i<10;i++){
+            const td=tds[6+i]; if(!td) continue;
+            const sel=td.querySelector('select');
+            if(sel){ sel.value=''; sel.dispatchEvent(new Event('change',{bubbles:true})); }
+            else td.textContent='';
+          }
+        }
+      } finally { window.__negForwardApplying = false; }
     }
-    let projects=[]; try { projects=JSON.parse(localStorage.getItem('projects')||'[]'); } catch(e){}
-    for(const p of projects){
-      if(p.type==='child'){
-        const pkey=[p.date,p.client,p.projectName,p.boardName].join('|');
-        if(pkey===key){
-          for(let i=0;i<negatives.length;i++){ p['neg'+(i+1)]=negatives[i]; }
-          for(let i=negatives.length;i<5;i++){ p['neg'+(i+1)]=''; }
-          // keep unified array
-          p.negStatuses = Array.from(new Set(negatives));
+    // עדכון נתונים בזיכרון
+    if(window.stateStore){
+      const arr=window.stateStore.getProjects();
+      for(const p of arr){
+        if(p.type==='child'){
+          const pkey=[p.date,p.client,p.projectName,p.boardName].join('|');
+            if(pkey===key){
+              const patch={};
+              for(let i=0;i<negatives.length;i++){ patch['neg'+(i+1)]=negatives[i]; }
+              for(let i=negatives.length;i<5;i++){ patch['neg'+(i+1)]=''; }
+              patch.negStatuses = Array.from(new Set(negatives));
+              window.stateStore.patchProject({ type:'child', orderId:p.orderId, boardName:p.boardName }, patch, 'productionTracking');
+            }
         }
       }
+      window.stateStore.flushNow('productionTracking.negatives');
+    } else {
+      let projects=[]; try { projects=JSON.parse(localStorage.getItem('projects')||'[]'); } catch(e){}
+      let changed=false;
+      for(const p of projects){
+        if(p.type==='child'){
+          const pkey=[p.date,p.client,p.projectName,p.boardName].join('|');
+          if(pkey===key){
+            const prevJson=JSON.stringify(p);
+            for(let i=0;i<negatives.length;i++){ p['neg'+(i+1)]=negatives[i]; }
+            for(let i=negatives.length;i<5;i++){ p['neg'+(i+1)]=''; }
+            p.negStatuses = Array.from(new Set(negatives));
+            if(prevJson!==JSON.stringify(p)) changed=true;
+          }
+        }
+      }
+      if(changed){ try { localStorage.setItem('projects', JSON.stringify(projects)); } catch(_){ } }
     }
-    localStorage.setItem('projects', JSON.stringify(projects));
+    try { if(window.showSavedIndicator) window.showSavedIndicator(); } catch(_){ }
+    try { console.debug('[persist][projects] productionTracking applied negatives', negatives); } catch(_){ }
   }
+
+  // Reverse sync: when user edits negative status selects directly inside projects table, reflect into productionTracking data model
+  function reverseSyncProductionTrackingFromProjectRow(tr){
+    try {
+      if(!tr || !tr.classList.contains('child-row')) return;
+      const tds = tr.querySelectorAll('td');
+      const getVal = (idx) => tds[idx]?.querySelector('input')?.value || tds[idx]?.querySelector('select')?.value || tds[idx]?.innerText || '';
+      const dateVal = getVal(0).trim();
+      const clientVal = getVal(1).trim();
+      const projectVal = getVal(2).trim();
+      const boardVal = getVal(3).trim();
+      const statusVal = getVal(5).trim();
+      const key = [dateVal, clientVal, projectVal, boardVal].join('|');
+      let prodData={};
+      try { prodData = JSON.parse(localStorage.getItem('productionTracking')||'{}'); } catch(e){ prodData={}; }
+      // Collect negatives from dynamic headers
+      let negatives=[];
+      try {
+        const table = tr.closest('table');
+        const theadCells = table?.querySelectorAll('thead tr th') || [];
+        for(let i=0;i<theadCells.length;i++){
+          if(theadCells[i].innerText.startsWith('סטטוס שלילי')){
+            const td = tds[i];
+            const v = td?.querySelector('select')?.value || td?.innerText || '';
+            if(v) negatives.push(v.trim());
+          }
+        }
+      } catch(_){ }
+      if(!negatives.length){
+        [6,7,8].forEach(i=>{ const v = tds[i]?.querySelector('select')?.value || tds[i]?.innerText || ''; if(v) negatives.push(v.trim()); });
+      }
+      negatives = Array.from(new Set(negatives.filter(Boolean)));
+      // If row not in production phase, remove any existing production tracking record
+      if(statusVal !== 'בייצור'){
+        if(prodData[key]){ delete prodData[key]; localStorage.setItem('productionTracking', JSON.stringify(prodData)); }
+        return;
+      }
+      if(!prodData[key]) prodData[key] = {};
+      const prodRow = prodData[key];
+      const negativeMap=[
+        {col:'structure', values:["חסר מבנה","חסר פנאלים","חסר מודול פנאלים","בהזמנה"]},
+        {col:'equipment', values:["חסר ציוד","ציוד בהזמנה"]},
+        {col:'assembly', values:["חסר מרכיבים"]},
+        {col:'wiring', values:["חסר גידים"]},
+        {col:'test', values:["נכשל בבדיקה"]}
+      ];
+      // Build a quick lookup of negatives present now
+      const negSet = new Set(negatives);
+      for(const m of negativeMap){
+        // Determine if any negative for this category present
+        const found = negatives.find(n => m.values.includes(n));
+        if(found){
+          if(prodRow[m.col] !== found){ prodRow[m.col] = found; }
+        } else {
+          // If current value is a negative of this category but was removed, clear it
+            if(m.values.includes(prodRow[m.col])) prodRow[m.col] = '';
+        }
+      }
+      // Persist production tracking dataset
+      localStorage.setItem('productionTracking', JSON.stringify(prodData));
+  // We intentionally do NOT rebuild production table immediately to avoid clobbering user edits.
+      try { if(window.showSavedIndicator) window.showSavedIndicator(); } catch(_){ }
+      try { console.debug('[productionTracking] reverse sync applied', { key, negatives, prodRow }); } catch(_){ }
+    } catch(e){ console.warn('reverseSyncProductionTrackingFromProjectRow failed', e); }
+  }
+
+  window.reverseSyncProductionTrackingFromProjectRow = reverseSyncProductionTrackingFromProjectRow;
 
   function ensureNegativeStatusColumns(count){
     const table=document.getElementById('projects-table-active');
@@ -209,4 +319,15 @@
   window.addEventListener('DOMContentLoaded', ()=>{
     if(typeof syncProductionTrackingTable==='function') syncProductionTrackingTable();
   });
+  if(!window.__prodTrackingUnloadBound){
+    window.addEventListener('beforeunload', ()=>{
+      try { const pd = JSON.parse(localStorage.getItem('productionTracking')||'{}'); localStorage.setItem('productionTracking', JSON.stringify(pd)); } catch(_){}
+    });
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState==='hidden'){
+        try { const pd = JSON.parse(localStorage.getItem('productionTracking')||'{}'); localStorage.setItem('productionTracking', JSON.stringify(pd)); } catch(_){}
+      }
+    });
+    window.__prodTrackingUnloadBound = true;
+  }
 })();

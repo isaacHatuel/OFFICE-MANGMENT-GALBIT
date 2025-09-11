@@ -6,6 +6,8 @@
     <title>Dashboard - ניהול משרד</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Load shared reference loader (clients/workers/statuses from DB) -->
+    <script src="main.js?v=1"></script>
     <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f8fb; margin: 0; direction: rtl; }
     .dashboard-container { max-width: 1100px; margin: 0 auto; padding: 12px; }
@@ -144,11 +146,13 @@
     </div>
 </div>
 <script>
+// Clients now come only from backend (no localStorage persistence)
 function getClients() {
-    try { return JSON.parse(localStorage.getItem('clients') || '[]'); } catch(e){ return []; }
+    return Array.isArray(window.__dbClients) ? window.__dbClients : [];
 }
+// Workers now only from backend
 function getWorkers() {
-    try { return JSON.parse(localStorage.getItem('workers') || '[]'); } catch(e){ return []; }
+    return Array.isArray(window.__dbWorkers) ? window.__dbWorkers : [];
 }
 function getStatuses() {
     try { return JSON.parse(localStorage.getItem('statuses') || '[]'); } catch(e){ return []; }
@@ -157,21 +161,19 @@ function openAddClientDialog() { document.getElementById('add-client-dialog').sh
 function closeAddClientDialog() { document.getElementById('add-client-dialog').close(); }
 function addClient(ev) {
     ev.preventDefault();
-    let arr = getClients();
     const name = document.getElementById('new-client-name').value.trim();
-    if (name && !arr.includes(name)) { arr.push(name); localStorage.setItem('clients', JSON.stringify(arr)); }
+    if(!name){ closeAddClientDialog(); return; }
+    alert('הוספת לקוח מתבצעת כעת דרך מסד הנתונים (API). פנה למערכת הניהול / הוסף דרך DBeaver.');
     closeAddClientDialog();
-    renderProjectsTable(getProjects().filter(p=>p.type!=='parent'));
 }
 function openAddWorkerDialog() { document.getElementById('add-worker-dialog').showModal(); document.getElementById('new-worker-name').value=''; }
 function closeAddWorkerDialog() { document.getElementById('add-worker-dialog').close(); }
 function addWorker(ev) {
     ev.preventDefault();
-    let arr = getWorkers();
     const name = document.getElementById('new-worker-name').value.trim();
-    if (name && !arr.includes(name)) { arr.push(name); localStorage.setItem('workers', JSON.stringify(arr)); }
+    if(!name){ closeAddWorkerDialog(); return; }
+    alert('הוספת עובד נעשית כעת דרך מסד הנתונים (טבלת workers).');
     closeAddWorkerDialog();
-    renderProjectsTable(getProjects().filter(p=>p.type!=='parent'));
 }
 function openAddStatusDialog() { document.getElementById('add-status-dialog').showModal(); document.getElementById('new-status-name').value=''; }
 function closeAddStatusDialog() { document.getElementById('add-status-dialog').close(); }

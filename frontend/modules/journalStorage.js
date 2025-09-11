@@ -40,13 +40,44 @@ export function mergeJournalTasks(incoming) {
 
 // פונקציית ניקוי כללית (לשימוש ע"י כפתור גלובלי)
 export function clearAllData(confirmPrompt = true) {
-  if (confirmPrompt && !confirm('האם אתה בטוח שברצונך למחוק את כל הפרויקטים, היומן והמעקב?')) return;
-  localStorage.removeItem('projects');
-  // לא מוחקים journalTasks כדי לא לאבד הערות – אם רוצים מחיקה מלאה בטוח להוסיף כאן.
-  localStorage.removeItem('productionTracking');
-  localStorage.removeItem('customWorkers');
+  if (confirmPrompt && !confirm('למחוק לחלוטין את כל נתוני localStorage של האפליקציה? (יומן, פרויקטים, הערות וכו\' )')) return;
+  try {
+    // שמירה על מפתחות שאינם קשורים? כרגע מוחקים הכל לגמרי.
+    localStorage.clear();
+  } catch(e) {
+    // Fallback granular
+    const keys = [
+      'projects','projects_backup','journalTasks','productionTracking','customWorkers',
+      '__creationQueue','__projectsSchemaVersion','__clients_purged_v1','projectHistory',
+  '__main_activeTab','workers','clients','statuses','__deletedOrderIds','__deletedBoardIds','__deletedProjectIds'
+    ];
+    keys.forEach(k=>{ try { localStorage.removeItem(k); } catch(_){ } });
+  }
   location.reload();
 }
+
+// מחיקת רשומות יומן השייכות ללקוח+פרויקט (ואופציונלית לוח ספציפי)
+export function removeJournalEntries(client, projectName, boardName) {
+  if (!client || !projectName) return 0;
+  let store = {};
+  try { store = JSON.parse(localStorage.getItem('journalTasks')||'{}'); } catch(_){ store={}; }
+  let removed = 0;
+  Object.keys(store).forEach(k => {
+    const parts = k.split('|');
+    if (parts.length < 4) return;
+    const [, c, p, b] = parts; // date|client|project|board
+    if (c === client && p === projectName && (boardName ? b === (boardName||'') : true)) {
+      delete store[k];
+      removed++;
+    }
+  });
+  if (removed) {
+    try { localStorage.setItem('journalTasks', JSON.stringify(store)); } catch(_){ }
+  }
+  return removed;
+}
+
+if (!window.removeJournalEntries) window.removeJournalEntries = removeJournalEntries;
 
 // חשיפה ל-legacy inline code
 if (!window.assignJournalEntry) window.assignJournalEntry = assignJournalEntry;

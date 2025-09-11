@@ -2,16 +2,48 @@
 // Handles: initial sync of projects -> journalTasks, dynamic worker tabs, subtab filtering, dialog interactions
 
 (function(){
+  try { console.log('[journalUI] v8 defaults (col7 לידור, col8-11 ספיר) + urgency + independence'); } catch(_){ }
+  // --- Key normalization & fuzzy lookup to keep notes stable across minor formatting changes ---
+  function __normPart(s){ if(!s) return ''; return String(s).trim().replace(/\s+/g,' '); }
+  function __buildKey(d,c,p,b){ return [__normPart(d),__normPart(c),__normPart(p),__normPart(b)].join('|'); }
+  function __stripZeros(t){ return t.replace(/\b0+(\d)/g,'$1'); }
+  function __findExistingKey(store, d,c,p,b){
+    const target = __buildKey(d,c,p,b);
+    if(store[target]) return target;
+    const tp = target.split('|');
+    for(const k in store){
+      const kp = k.split('|'); if(kp.length!==4) continue;
+      let match=true;
+      for(let i=0;i<4;i++){
+        const a = __stripZeros(__normPart(kp[i]));
+        const b2 = __stripZeros(__normPart(tp[i]));
+        if(a!==b2){ match=false; break; }
+      }
+      if(match) return k; // reuse existing to preserve note
+    }
+    return target; // new key
+  }
   function safeParse(key,def){ try { return JSON.parse(localStorage.getItem(key)||def); } catch(e){ return JSON.parse(def); } }
 
   function initialSync() {
     try {
       let projects = safeParse('projects','[]');
       let journalData = safeParse('journalTasks','{}');
-      projects.forEach(p => {
+      // Recover journal from backup if empty but backup exists
+      if (Object.keys(journalData).length===0) {
+        try {
+          const bk = localStorage.getItem('journalTasks_backup');
+          if (bk) {
+            journalData = JSON.parse(bk);
+            localStorage.setItem('journalTasks', JSON.stringify(journalData));
+            console.warn('[journal] recovered journalTasks from backup');
+          }
+        } catch(e){}
+      }
+  projects.forEach(p => {
         if (!p || p.type==='parent') return; // only child rows
         if (!p.orderId || !p.client || !p.projectName || !p.date) return;
-        const key = [p.date, p.client, p.projectName, p.boardName].join('|');
+        const key = __findExistingKey(journalData, p.date, p.client, p.projectName, p.boardName);
         if (!journalData[key]) {
           journalData[key] = { date: p.date, client: p.client, projectName: p.projectName, boardName: p.boardName };
         }
@@ -21,9 +53,9 @@
     try {
       let projects = safeParse('projects','[]');
       let journalData = safeParse('journalTasks','{}');
-      projects.forEach(p => {
+  projects.forEach(p => {
         if (!p.date || !p.client || !p.projectName || !p.boardName) return;
-        const key = [p.date, p.client, p.projectName, p.boardName].join('|');
+        const key = __findExistingKey(journalData, p.date, p.client, p.projectName, p.boardName);
         if (!journalData[key]) journalData[key] = { col7: '' };
       });
       Object.keys(journalData).forEach(k => window.assignJournalEntry && window.assignJournalEntry(k, journalData[k]));
@@ -99,7 +131,7 @@
       const w=b.dataset.worker;
       if(colorMap[w]) b.style.border=`2px solid ${colorMap[w]}`;
     });
-    subtabBtns.forEach(btn => {
+  subtabBtns.forEach(btn => {
       btn.addEventListener('click', e => {
         if (e.target.classList.contains('remove-worker-btn')) {
           const workerName = btn.dataset.worker;
@@ -130,14 +162,21 @@
         } else {
           if (approvalBtn) approvalBtn.style.display='none';
         }
-        if (typeof window.syncJournalTable === 'function') window.syncJournalTable(btn.dataset.worker);
+  if (typeof window.syncJournalTable === 'function') window.syncJournalTable(btn.dataset.worker);
+  try { localStorage.setItem('__journal_lastFilter', btn.dataset.worker||'all'); } catch(_){}
       });
     });
   }
 
   function activateDefaultTab() {
     const allBtn = document.querySelector('.journal-subtab-btn[data-worker="all"]');
-  if (allBtn) { allBtn.style.background='#1976d2'; allBtn.style.color='#fff'; }
+    // Restore last filter if exists
+    let lf = null; try { lf = localStorage.getItem('__journal_lastFilter'); } catch(_){ lf=null; }
+    if (lf && document.querySelector('.journal-subtab-btn[data-worker="'+lf+'"]')) {
+      setTimeout(()=>{ document.querySelector('.journal-subtab-btn[data-worker="'+lf+'"]').click(); }, 50);
+    } else if (allBtn) {
+      allBtn.style.background='#1976d2'; allBtn.style.color='#fff';
+    }
     const approvalBtn = document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]');
     if (approvalBtn) approvalBtn.style.display='none';
   }
@@ -155,6 +194,44 @@
   });
 })();
 
+// Provide global key resolver for journal (mirrors private logic) so later code can use it safely
+if(!window.__findExistingJournalKey){
+  window.__findExistingJournalKey = function(store, d, c, p, b){
+    function norm(s){ return !s? '': String(s).trim().replace(/\s+/g,' '); }
+    function stripZeros(t){ return String(t).replace(/\b0+(\d)/g,'$1'); }
+    const target=[norm(d),norm(c),norm(p),norm(b)].join('|');
+    if(store && store[target]) return target;
+    const tp=target.split('|');
+    for(const k in (store||{})){
+      const kp=k.split('|'); if(kp.length!==4) continue; let match=true;
+      for(let i=0;i<4;i++){ if(stripZeros(norm(kp[i]))!==stripZeros(norm(tp[i]))){ match=false; break; } }
+      if(match) return k;
+    }
+    return target;
+  };
+}
+
+// Backward compatibility: some legacy code (or cached tabs) may still reference __findExistingKey globally.
+// Expose a safe alias that delegates to the new public helper if the closure version is gone.
+if (typeof window.__findExistingKey !== 'function') {
+  window.__findExistingKey = function(store, d, c, p, b){
+    return window.__findExistingJournalKey ? window.__findExistingJournalKey(store,d,c,p,b) : [d||'',c||'',p||'',b||''].join('|');
+  };
+}
+
+// --- Autosave integration for journal tasks: debounce journalTasks writes on note / select changes already occur; add beforeunload flush
+if(!window.__journalAutosaveBound){
+  window.addEventListener('beforeunload', ()=>{
+    try { const jd = JSON.parse(localStorage.getItem('journalTasks')||'{}'); localStorage.setItem('journalTasks', JSON.stringify(jd)); } catch(_){}
+  });
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState==='hidden'){
+      try { const jd = JSON.parse(localStorage.getItem('journalTasks')||'{}'); localStorage.setItem('journalTasks', JSON.stringify(jd)); } catch(_){}
+    }
+  });
+  window.__journalAutosaveBound = true;
+}
+
 // New implementation: build journal table from current project child rows
 window.syncJournalTable = function(filterWorker) {
   try {
@@ -164,8 +241,7 @@ window.syncJournalTable = function(filterWorker) {
     const all = JSON.parse(localStorage.getItem('projects')||'[]');
     const parents = all.filter(r=>r.type==='parent');
     const children = all.filter(r=>r.type==='child');
-  const workerColor={ 'לידור':'#2e7d32', 'ספיר':'#d81b60', 'מתן':'#ef6c00' };
-    // load journal assignment data (col7-col13 etc)
+    const workerColor={ 'לידור':'#2e7d32', 'ספיר':'#d81b60', 'מתן':'#ef6c00' };
     let journalData={};
     try { journalData=JSON.parse(localStorage.getItem('journalTasks')||'{}'); } catch(e){ journalData={}; }
 
@@ -205,15 +281,17 @@ window.syncJournalTable = function(filterWorker) {
       [...opts,...extra].forEach(o=>{ const op=document.createElement('option'); op.value=o; op.textContent=o; if(o===currentVal) op.selected=true; select.appendChild(op); });
       return select;
     }
-    parents.forEach(parent => {
+  parents.forEach(parent => {
       const allChildren = children.filter(c=>c.orderId===parent.orderId);
       // children after worker filter (using journalData assignment logic) not just worker field on project
       const pChildren = allChildren.filter(ch=>{
-        const key=[ch.date,ch.client,ch.projectName,ch.boardName].join('|');
-        const rowData=journalData[key];
+  const key=window.__findExistingJournalKey(journalData, ch.date, ch.client, ch.projectName, ch.boardName);
+  const rowData=journalData[key];
         return rowIncluded(rowData, filterWorker);
       });
-      if (!pChildren.length) return; // skip if no visible children for this filter
+  // If there are no child boards yet, previously we skipped the parent entirely – causing an empty journal.
+  // Show parent row (quantity 0) when filter is 'all' (or undefined). For specific worker filters still hide.
+  if (!pChildren.length && filterWorker && filterWorker!=='all') return;
       // Build an aligned parent row (no colspan) with collapse button similar to production tracking
       const pr = document.createElement('tr');
       pr.className='journal-parent';
@@ -232,19 +310,72 @@ window.syncJournalTable = function(filterWorker) {
   const boardTd=document.createElement('td'); boardTd.style.background='#eef6fb'; pr.appendChild(boardTd);
   // Quantity column = number of child boards (after worker filter)
       const qtyTd=document.createElement('td'); qtyTd.style.background='#eef6fb'; qtyTd.style.fontWeight='600'; qtyTd.textContent = pChildren.length; pr.appendChild(qtyTd);
-      // Notes column for parent
-      if(!journalData[parentKey]) journalData[parentKey] = journalData[parentKey] || {};
-      const parentNoteVal = (journalData[parentKey] && journalData[parentKey].note) ? journalData[parentKey].note : '';
-      const noteTd = document.createElement('td');
-      noteTd.style.background = '#eef6fb';
-      noteTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;display:flex;align-items:center;gap:4px;">
-          <span class="note-display" data-has-note="${parentNoteVal?1:0}" style="flex:1;min-width:0;cursor:${parentNoteVal? 'pointer':'text'};color:${parentNoteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parentNoteVal? 'הערה קיימת!':''}</span>
-          <button type="button" class="journal-note-edit-btn" aria-label="עריכת הערה" title="עריכת הערה" style="border:1px solid #90caf9;background:#fff;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75em;line-height:1;">✎</button>
-          <input type="hidden" class="note-hidden-input" value="${parentNoteVal.replace(/"/g,'&quot;')}">
+      // Job Number / Plan column (parent only)
+      if(!journalData[parentKey]) journalData[parentKey] = { jobNumber: '' };
+      if(typeof journalData[parentKey].urgency === 'undefined') journalData[parentKey].urgency = '';
+      const jobNumberVal = journalData[parentKey].jobNumber || '';
+      const urgencyVal = journalData[parentKey].urgency || '';
+      const jobTd = document.createElement('td');
+      jobTd.style.background='#eef6fb';
+      jobTd.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+          <input type="text" class="job-number-input" placeholder="מספר עבודה /תכנית" value="${(jobNumberVal||'').replace(/"/g,'&quot;')}" style="width:100%;box-sizing:border-box;padding:2px 4px;font-size:0.8em;direction:rtl;">
+          <div style="display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:0.7em;">
+            <span style="white-space:nowrap;">רמת דחיפות:</span>
+            <select class="journal-urgency-select" style="flex:1;direction:rtl;padding:2px 4px;font-size:0.9em;">
+              <option value="" ${!urgencyVal?'selected':''}></option>
+              <option value="רגילה" ${urgencyVal==='רגילה'?'selected':''}>רגילה</option>
+              <option value="דחופה" ${urgencyVal==='דחופה'?'selected':''}>דחופה</option>
+              <option value="בהולה" ${urgencyVal==='בהולה'?'selected':''}>בהולה</option>
+              <option value="קריטית" ${urgencyVal==='קריטית'?'selected':''}>קריטית</option>
+            </select>
+          </div>
         </div>`;
-      pr.appendChild(noteTd);
-      // Remaining 8 task columns placeholders (col7-col13)
-      for(let i=0;i<8;i++){ const td=document.createElement('td'); td.style.background='#eef6fb'; pr.appendChild(td); }
+      const jobInp = jobTd.querySelector('input');
+      const urgencySel = jobTd.querySelector('.journal-urgency-select');
+      let jbTimer=null;
+      jobInp.addEventListener('input', ()=>{
+        if(jbTimer) clearTimeout(jbTimer);
+        jbTimer = setTimeout(()=>{
+          journalData[parentKey].jobNumber = jobInp.value.trim();
+          try {
+            localStorage.setItem('journalTasks', JSON.stringify(journalData));
+            localStorage.setItem('journalTasks_backup', JSON.stringify(journalData));
+          } catch(_){ }
+          if(window.showSavedIndicator) window.showSavedIndicator();
+        }, 300);
+      });
+      // Urgency handling
+      function applyUrgencyColor(tr, val){
+        const map = {
+          '': {bg:'#eef6fb', color:'#000'},
+          'רגילה': { bg:'#fff9c4', color:'#000' }, // Yellow
+          'דחופה': { bg:'#ffe0b2', color:'#000' }, // Orange
+          'בהולה': { bg:'#ffcdd2', color:'#000' }, // Red tint
+          'קריטית': { bg:'#e1bee7', color:'#311b92' } // Purple tint
+        };
+        const cfg = map[val] || map[''];
+        try {
+          tr.style.backgroundColor = cfg.bg;
+          // Keep first cells bold but readable
+          Array.from(tr.children).forEach(td=>{ td.style.backgroundColor = cfg.bg; });
+        } catch(e){}
+      }
+      applyUrgencyColor(pr, urgencyVal);
+      urgencySel.addEventListener('change', ()=>{
+        journalData[parentKey].urgency = urgencySel.value;
+        try {
+          localStorage.setItem('journalTasks', JSON.stringify(journalData));
+          localStorage.setItem('journalTasks_backup', JSON.stringify(journalData));
+        } catch(_){ }
+        applyUrgencyColor(pr, urgencySel.value);
+        if(window.showSavedIndicator) window.showSavedIndicator();
+      });
+      pr.appendChild(jobTd);
+  // New board notes column placeholder (parent row empty)
+  const parentNoteTd = document.createElement('td'); parentNoteTd.style.background='#eef6fb'; pr.appendChild(parentNoteTd);
+  // Remaining 7 task columns placeholders (after new note column)
+  for(let i=0;i<7;i++){ const td=document.createElement('td'); td.style.background='#eef6fb'; pr.appendChild(td); }
       tbody.appendChild(pr);
       const collapseBtn = pr.querySelector('.journal-collapse');
       collapseBtn.addEventListener('click', () => {
@@ -258,26 +389,55 @@ window.syncJournalTable = function(filterWorker) {
       });
       // Child rows with worker assignment selects
       pChildren.forEach(ch => {
-        const key = [ch.date,ch.client,ch.projectName,ch.boardName].join('|');
+  const key = window.__findExistingJournalKey(journalData, ch.date, ch.client, ch.projectName, ch.boardName);
         if (window.assignJournalEntry) window.assignJournalEntry(key, { date:ch.date, client:ch.client, projectName:ch.projectName, boardName:ch.boardName });
         if(!journalData[key]) journalData[key]={};
+        // Apply default worker assignments (only if empty) once when row materializes
+        try {
+          if((journalData[key].col7||'')==='') journalData[key].col7='לידור'; // שרטוט
+          // מדבקות/מהדקים/גידים/שלטים -> col8..col11
+          if((journalData[key].col8||'')==='') journalData[key].col8='ספיר';
+          if((journalData[key].col9||'')==='') journalData[key].col9='ספיר';
+          if((journalData[key].col10||'')==='') journalData[key].col10='ספיר';
+          if((journalData[key].col11||'')==='') journalData[key].col11='ספיר';
+        } catch(_){ }
         const tr=document.createElement('tr'); tr.className='journal-child';
         tr.dataset.journalKey = key;
         // static columns
   // Child row base columns: date, client, project, board, quantity(=1), notes(blank)
-        const noteVal = journalData[key].note || '';
+  let noteVal = '';
+  if (journalData[key] && typeof journalData[key].note === 'string') noteVal = journalData[key].note; // no project fallback (strict)
         const staticVals=[ch.date||'', ch.client||'', ch.projectName||'', ch.boardName||'', 1];
         staticVals.forEach((val)=>{ const td=document.createElement('td'); td.textContent=val; tr.appendChild(td); });
-        // notes cell
-        const notesTd = document.createElement('td');
-        notesTd.innerHTML = `<div class="journal-note-cell note-cell-wrapper" style="position:relative;display:flex;align-items:center;gap:4px;">
-            <span class="note-display" data-has-note="${noteVal?1:0}" style="flex:1;min-width:0;cursor:${noteVal? 'pointer':'text'};color:${noteVal? '#1565c0':'#333'};font-size:0.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${noteVal? 'הערה קיימת!':''}</span>
-            <button type="button" class="journal-note-edit-btn" aria-label="עריכת הערה" title="עריכת הערה" style="border:1px solid #90caf9;background:#fff;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:0.75em;line-height:1;">✎</button>
-            <input type="hidden" class="note-hidden-input" value="${noteVal.replace(/"/g,'&quot;')}">
-          </div>`;
-        tr.appendChild(notesTd);
-        // columns 7-13 with selects
-    for(let col=7; col<=13; col++){
+        // Job number column for child (blank)
+        const childJobTd=document.createElement('td'); tr.appendChild(childJobTd);
+        // Board note column (interactive like project notes)
+        const noteTd = document.createElement('td');
+        noteTd.className = 'journal-note-cell';
+        noteTd.innerHTML = `<div class="note-cell-wrapper" style="position:relative;">
+          <span class="note-display" data-has-note="${noteVal?1:0}" style="cursor:${noteVal? 'pointer':'text'};color:${noteVal? '#1565c0':'#333'};font-size:0.78em;white-space:nowrap;">${noteVal? 'הערה קיימת!':''}</span>
+          <input type="hidden" class="note-hidden-input" value="${(noteVal||'').replace(/"/g,'&quot;')}">
+        </div>`;
+        // dblclick opens shared overlay editor from projectTable.js
+        noteTd.addEventListener('dblclick', ()=>{
+          if (typeof window.openInlineNoteEditor === 'function') {
+            window.openInlineNoteEditor(noteTd);
+          } else {
+            // simple fallback inline prompt
+            const nv = prompt('הערה ללוח', noteVal||'')||'';
+            noteVal = nv.trim();
+            let jd={}; try{ jd=JSON.parse(localStorage.getItem('journalTasks')||'{}'); }catch(e){ jd={}; }
+            if(!jd[key]) jd[key]={};
+            jd[key].note = noteVal; localStorage.setItem('journalTasks', JSON.stringify(jd));
+            const span = noteTd.querySelector('.note-display');
+            const hidden = noteTd.querySelector('.note-hidden-input');
+            if(span){ span.textContent = noteVal? 'הערה קיימת!':''; span.dataset.hasNote = noteVal? '1':'0'; span.style.cursor = noteVal? 'pointer':'text'; span.style.color = noteVal? '#1565c0':'#333'; }
+            if(hidden) hidden.value = noteVal;
+          }
+        });
+        tr.appendChild(noteTd);
+        // columns 7-13 (worker selects) now shift right by one due to note column addition
+        for(let col=7; col<=13; col++){
           const td=document.createElement('td');
           const currentVal=journalData[key]['col'+col]||'';
           const isDoneState = (col===7 && currentVal==='מאושר לביצוע') || (col>=8 && currentVal==='הסתיים');
@@ -289,14 +449,19 @@ window.syncJournalTable = function(filterWorker) {
               ev.preventDefault();
               journalData[key]['col'+col]='מתן';
               localStorage.setItem('journalTasks', JSON.stringify(journalData));
+              if (window.showSavedIndicator) window.showSavedIndicator();
               // After revert go to מתן subtab
               setTimeout(()=>{ document.querySelector('.journal-subtab-btn[data-worker="מתן"]')?.click(); },80);
             });
           } else {
             const sel=buildWorkerSelect(currentVal, col);
             sel.addEventListener('change', ()=>{
-              journalData[key]['col'+col]=sel.value;
+              // Re-evaluate key in case parts changed (unlikely but safe)
+              const newKey = window.__findExistingJournalKey(journalData, ch.date, ch.client, ch.projectName, ch.boardName);
+              if(newKey!==key && !journalData[newKey]) journalData[newKey]=journalData[key];
+              journalData[newKey]['col'+col]=sel.value;
               localStorage.setItem('journalTasks', JSON.stringify(journalData));
+              if (window.showSavedIndicator) window.showSavedIndicator();
               // automation transitions
               if(col===7 && sel.value==='באישור לקוח'){
                 setTimeout(()=>{ document.querySelector('.journal-subtab-btn[data-worker="lidor-approval"]')?.click(); },120);
@@ -318,62 +483,17 @@ window.syncJournalTable = function(filterWorker) {
         tbody.appendChild(tr);
       });
     });
-    // persist any initialization of journalData
-    localStorage.setItem('journalTasks', JSON.stringify(journalData));
-
-    // Bind double-click to open note editor for all journal note cells (parent + child)
-    function bindJournalNoteCells(){
-      Array.from(tbody.querySelectorAll('.journal-note-cell')).forEach(cell => {
-        const td = cell.closest('td');
-        if(!td) return;
-        const span = td.querySelector('.note-display');
-        const editBtn = td.querySelector('.journal-note-edit-btn');
-        const openEditor = () => {
-          if (typeof window.openInlineNoteEditor === 'function') {
-            window.openInlineNoteEditor(td);
-          } else {
-            let attempts=0;
-            const poll = () => {
-              if (typeof window.openInlineNoteEditor === 'function') return window.openInlineNoteEditor(td);
-              if (++attempts < 10) setTimeout(poll,100);
-            };
-            poll();
-          }
-        };
-        if(!td._journalNoteDbl){
-          td.addEventListener('dblclick', e => { e.stopPropagation(); openEditor(); });
-          td._journalNoteDbl = true;
-        }
-        // Single click when empty (no existing note) for faster entry
-        if(!td._journalNoteSingle){
-          td.addEventListener('click', e => {
-            if(span && !span.textContent.trim()) openEditor();
-          });
-          td._journalNoteSingle = true;
-        }
-        if(editBtn && !editBtn._journalNoteEdit){
-          editBtn.addEventListener('click', e => { e.stopPropagation(); openEditor(); });
-          editBtn._journalNoteEdit = true;
-        }
-        if(span && !span._journalNoteSpan){
-          span.addEventListener('dblclick', e => { e.stopPropagation(); openEditor(); });
-          span._journalNoteSpan = true;
-        }
-      });
-    }
-    bindJournalNoteCells();
-    // Delegation fallback (in case future rows injected without full rebuild)
-    if(!tbody._journalNoteDelegated){
-      tbody.addEventListener('dblclick', (e)=>{
-        const wrapper = e.target.closest && e.target.closest('.journal-note-cell');
-        if(wrapper){
-          const td = wrapper.closest('td');
-            if(td){
-              if (typeof window.openInlineNoteEditor === 'function') window.openInlineNoteEditor(td);
-            }
-        }
-      });
-      tbody._journalNoteDelegated = true;
-    }
+    // persist snapshot if changed
+    try {
+      const prev = localStorage.getItem('journalTasks');
+      const nextStr = JSON.stringify(journalData);
+      if (prev !== nextStr) {
+        localStorage.setItem('journalTasks', nextStr);
+        try { localStorage.setItem('journalTasks_backup', nextStr); } catch(_){ }
+      }
+    } catch(_){ }
   } catch(e){ console.warn('syncJournalTable failed', e); }
 };
+
+// Board note overlay editor (global)
+// Board note feature removed per latest request

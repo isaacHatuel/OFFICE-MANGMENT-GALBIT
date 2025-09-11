@@ -12,13 +12,31 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Mount initialization SQL (converted from single file). If you prefer a directory, create server/init-scripts and place files there.
       - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U officeuser -d officedb"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  db-backup:
+    image: postgres:16
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: officepass
+    command: >-
+      /bin/bash -c "while true; do ts=\"$(date +%Y-%m-%d)\"; echo '[backup] start '$ts; \
+      pg_dump -h db -U officeuser -d officedb --schema-only > /backups/${ts}_schema.sql 2>>/backups/backup.log; \
+      pg_dump -h db -U officeuser -d officedb > /backups/${ts}_full.sql 2>>/backups/backup.log; \
+      ls -1 /backups/*_full.sql 2>/dev/null | sort | head -n -7 | xargs -r rm -f; \
+      ls -1 /backups/*_schema.sql 2>/dev/null | sort | head -n -7 | xargs -r rm -f; \
+      echo '[backup] done '$ts; sleep 86400; done"
+    volumes:
+      - db_backups:/backups
+      - ./db_backups:/host_backups
 
   app:
     build:
@@ -31,24 +49,31 @@ services:
       DB_NAME: officedb
       DB_PORT: 5432
       STATS_CACHE_TTL_MS: "30000"
+      ADMIN_TOKEN: "GALBIT2025"
     ports:
       - "3001:3001"
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./server/public/clients.json:/app/public/clients.json
+      - ./server/public/workers.json:/app/public/workers.json
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        BUILD_VERSION: "v$(date +%Y%m%d-%H%M%S)"
+        BUILD_TIME: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     restart: always
     ports:
       - "3000:80"
     depends_on:
       - app
     environment:
-      # For potential future runtime flags
       APP_API_BASE: /api
 
 volumes:
   pgdata:
+  db_backups:
